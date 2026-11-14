@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<!-- 확대/스크롤 방지: 워치·아이폰 모두 고정 뷰포트로 사용 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>멍워치</title>
+<style>
+  /* ───────── 공통 ───────── */
+  :root{
+    --bg:#0c0c0e; --card:#17171a; --line:#27272c; --text:#f3efe9; --sub:#9a948c;
+    --accent:#f2913d; --accent-ink:#1a0f04; --ok:#5fd38a; --radius:18px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:#000;color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+  button,input,select{font:inherit;color:inherit}
+  [hidden]{display:none !important}
+
+  /* ───────── 워치 모드: 스크롤 원천 차단 + 순수 검정(OLED 절전) ───────── */
+  body.watch{position:fixed;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;
+    overflow:hidden;background:#000;touch-action:none;-webkit-user-select:none;user-select:none}
+  #watch{position:fixed;top:0;left:0;right:0;bottom:0;background:#000;overflow:hidden}
+  #watchCanvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:none}
+  #start{position:absolute;top:0;left:0;right:0;bottom:0;background:#000;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+  #startImg{width:46vmin;height:46vmin;max-width:220px;max-height:220px;display:block}
+  #startBtn{border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);
+    font-weight:800;font-size:17px;min-width:96px;min-height:44px;padding:8px 22px}
+  #toPhone{position:absolute;top:10px;left:10px;border:1px solid #333;background:#000;color:#aaa;
+    border-radius:999px;font-size:12px;padding:6px 12px}
+
+  /* ───────── 아이폰 컨트롤 타워 모드 ───────── */
+  body.phone{background:var(--bg);min-height:100vh;
+    padding:env(safe-area-inset-top) 0 calc(28px + env(safe-area-inset-bottom))}
+  #phone{max-width:520px;margin:0 auto;padding:14px 14px 0}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 4px 14px}
+  .top h1{font-size:22px;margin:0;letter-spacing:-.02em;line-height:1.2}
+  .top h1 small{display:block;font-size:12px;font-weight:500;color:var(--sub);letter-spacing:0}
+  .pill{border:1px solid var(--line);background:var(--card);border-radius:999px;
+    padding:9px 14px;font-size:13px;font-weight:600;white-space:nowrap}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;margin-bottom:12px}
+  .card h2{font-size:15px;margin:0 0 12px;display:flex;justify-content:space-between;align-items:baseline}
+  .card h2 span{font-size:12px;font-weight:500;color:var(--sub)}
+  .stage{background:#000;border-radius:14px;overflow:hidden;position:relative;height:250px}
+  #previewCanvas{width:100%;height:100%;display:block;touch-action:none}
+  .stage .pill{position:absolute;right:10px;bottom:10px;background:rgba(20,20,22,.85);font-size:12px;padding:7px 12px}
+  label.f{display:block;font-size:12px;color:var(--sub);margin:12px 0 6px}
+  label.f:first-of-type{margin-top:0}
+  input[type=text],input[type=url],select{width:100%;background:#0f0f11;border:1px solid var(--line);
+    border-radius:12px;padding:12px;font-size:16px;outline:none}
+  input:focus,select:focus{border-color:var(--accent)}
+  .dogs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .dogs button{background:#000;border:2px solid var(--line);border-radius:14px;padding:4px 4px 7px;
+    font-size:12px;color:var(--sub)}
+  .dogs img{width:100%;aspect-ratio:1;display:block;border-radius:10px}
+  .dogs button[aria-pressed=true]{border-color:var(--accent);color:var(--text)}
+  .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .seg button{background:#0f0f11;border:1px solid var(--line);border-radius:12px;padding:11px 0;font-size:14px}
+  .seg button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+  input[type=range]{width:100%;accent-color:var(--accent);height:32px}
+  .acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .acts button{background:#0f0f11;border:1px solid var(--line);border-radius:14px;padding:14px 4px;
+    font-size:14px;font-weight:600;line-height:1.5}
+  .acts button b{display:block;font-size:26px;font-weight:400}
+  .acts button:active,.btn:active{transform:scale(.97)}
+  .url{background:#0f0f11;border:1px dashed var(--line);border-radius:12px;padding:12px;
+    font:12px/1.5 ui-monospace,Menlo,monospace;color:#d8d2c8;word-break:break-all;margin:12px 0}
+  .btn{display:block;width:100%;border:0;border-radius:14px;padding:15px;font-size:16px;font-weight:800;
+    background:var(--accent);color:var(--accent-ink);text-align:center;text-decoration:none}
+  .btn.ghost{background:#0f0f11;color:var(--text);border:1px solid var(--line);font-weight:600;margin-top:8px}
+  .row{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px}
+  .chk{display:flex;align-items:center;gap:7px;font-size:14px}
+  .chk input{width:20px;height:20px;accent-color:var(--accent)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .stats div{background:#0f0f11;border-radius:12px;padding:12px 4px;text-align:center;font-size:11px;color:var(--sub)}
+  .stats b{display:block;font-size:22px;color:var(--text);font-variant-numeric:tabular-nums}
+  .note{font-size:12px;color:var(--sub);line-height:1.6;margin:10px 0 0}
+  .warn{color:#ffb86b}
+  details summary{font-size:15px;font-weight:700;cursor:pointer}
+  details ol{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:1.7;color:#d8d2c8}
+  details code{background:#0f0f11;padding:1px 5px;border-radius:5px;font-size:12px}
+</style>
+</head>
+<body>
+
+<!-- ═════════ [워치 모드] 화면 ═════════ -->
+<div id="watch" hidden>
+  <canvas id="watchCanvas"></canvas>
+  <div id="start">
+    <img id="startImg" alt="">
+    <!-- 첫 터치에서 센서 권한을 요청해야 하므로(iOS/watchOS 정책) 반드시 버튼으로 시작 -->
+    <button id="startBtn">시작</button>
+    <button id="toPhone" hidden>폰 모드</button>
+  </div>
+</div>
+
+<!-- ═════════ [아이폰 컨트롤 타워 모드] 화면 ═════════ -->
+<div id="phone" hidden>
+  <div class="top">
+    <h1><span id="title">초코</span><small>컨트롤 타워</small></h1>
+    <button class="pill" id="toWatch">워치 모드로 보기</button>
+  </div>
+
+  <div class="card">
+    <div class="stage">
+      <canvas id="previewCanvas"></canvas>
+      <button class="pill" id="tiltBtn">기울임 켜기</button>
+    </div>
+    <p class="note">드래그하면 따라오고, 강아지를 탭하면 하트, 두 번 탭하면 "멍!", 빈 곳을 길게 누르면 간식이 떨어집니다.</p>
+  </div>
+
+  <div class="card">
+    <h2>강아지 꾸미기</h2>
+    <label class="f" for="name">이름</label>
+    <input type="text" id="name" maxlength="8" autocomplete="off">
+    <label class="f">견종</label>
+    <div class="dogs" id="dogs"></div>
+    <label class="f">악세서리</label>
+    <div class="seg" id="accs"></div>
+    <label class="f" for="sens">민감도 (중력 반응 속도) <b id="sensVal"></b></label>
+    <input type="range" id="sens" min="0.5" max="3" step="0.1">
+  </div>
+
+  <div class="card">
+    <h2>케어 & 액션 <span>미리보기 강아지에 바로 반응</span></h2>
+    <div class="acts">
+      <button data-act="treat"><b>🦴</b>간식 주기</button>
+      <button data-act="ball"><b>🎾</b>공 던지기</button>
+      <button data-act="sleep" id="sleepBtn"><b>😴</b>재우기</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>워치 단축어 연동기</h2>
+    <label class="f" for="base">배포 주소</label>
+    <input type="url" id="base" autocomplete="off" inputmode="url">
+    <label class="f" for="act">워치에서 열릴 때 할 행동</label>
+    <select id="act">
+      <option value="">없음</option>
+      <option value="treat">간식 주기</option>
+      <option value="ball">공 던지기</option>
+      <option value="sleep">자는 상태로 시작</option>
+    </select>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="flip">기울임 방향 반대로</label>
+      <label class="chk"><input type="checkbox" id="debug">센서 진단 표시</label>
+    </div>
+    <div class="url" id="url"></div>
+    <button class="btn" id="copy">워치용 링크 복사</button>
+    <a class="btn ghost" id="sms">메시지로 나에게 보내기</a>
+    <p class="note warn" id="baseWarn" hidden>지금은 로컬 파일로 열려 있습니다. 워치에서 열려면 GitHub Pages 주소를 '배포 주소'에 넣어 주세요.</p>
+  </div>
+
+  <div class="card">
+    <h2>오늘의 활동량 <span id="today"></span></h2>
+    <div class="stats">
+      <div><b id="s-shake">0</b>흔들기</div>
+      <div><b id="s-pet">0</b>쓰다듬기</div>
+      <div><b id="s-treat">0</b>간식</div>
+      <div><b id="s-ball">0</b>공 잡기</div>
+    </div>
+    <p class="note">이 아이폰에서 놀아준 기록입니다. 워치 기록까지 합치려면 코드의 SYNC 영역에 Firebase를 연결해야 합니다.</p>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>워치에 연결하는 방법</summary>
+      <ol>
+        <li>위에서 강아지를 꾸미고 <b>워치용 링크 복사</b>를 누릅니다.</li>
+        <li>아이폰 <b>단축어</b> 앱 → 새 단축어 → 동작 추가에서 <code>URL의 웹 페이지 보기</code>를 고르고 링크를 붙여넣습니다. (<code>URL 열기</code>는 워치에서 오류가 납니다)</li>
+        <li>단축어 설정(ⓘ)에서 <b>Apple Watch에 표시</b>를 켭니다.</li>
+        <li>워치의 단축어 앱에서 실행 → <b>시작</b>을 누릅니다.</li>
+        <li>단축어로 안 열리면 <b>메시지로 나에게 보내기</b> 후 워치 메시지 앱에서 링크를 탭하세요.</li>
+      </ol>
+    </details>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   멍워치 — 워치/아이폰 듀얼 모드 강아지 웹 앱 (외부 라이브러리 없음)
+   구성:  1) 설정/모드 판별   2) 센서 매니저   3) 강아지 스테이지(물리+렌더)
+          4) 워치 모드        5) 아이폰 컨트롤 타워   6) SYNC(선택) 스니펫
+   ════════════════════════════════════════════════════════════════════ */
+(function(){
+'use strict';
+
+/* ───────── 1) 설정 / 모드 판별 ───────── */
+
+// 견종 데이터. top/chin 은 이미지(정사각형) 안에서 머리 꼭대기·턱의 세로 위치(0~1).
+// 악세서리를 견종마다 알맞은 자리에 그리기 위한 값입니다.
+var DOGS = {
+  shiba:  {label:'시바',     top:.175, chin:.972},
+  bichon: {label:'비숑',     top:.033, chin:.954},
+  poodle: {label:'푸들',     top:.054, chin:.877},
+  corgi:  {label:'코기',     top:.251, chin:.984},
+  husky:  {label:'허스키',   top:.225, chin:.970},
+  golden: {label:'리트리버', top:.041, chin:.983}
+};
+var ACCS = {none:'없음', scarf:'스카프', hat:'모자', ribbon:'리본'};
+
+var qs = new URLSearchParams(location.search);
+var store = {            // localStorage 는 워치에서 지워질 수 있으므로 항상 try/catch
+  get:function(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+  set:function(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+
+// 우선순위: 기본값 < 저장된 값(아이폰) < URL 파라미터(워치는 이것만으로 100% 동작)
+var cfg = {name:'초코', dog:'shiba', acc:'none', sens:1.5, flip:false, debug:false, act:''};
+var saved = store.get('mw.cfg'); if(saved) for(var k in cfg) if(saved[k]!=null) cfg[k]=saved[k];
+if(qs.get('name'))  cfg.name = qs.get('name').slice(0,8);
+if(DOGS[qs.get('dog')]) cfg.dog = qs.get('dog');
+if(ACCS[qs.get('acc')]) cfg.acc = qs.get('acc');
+if(qs.get('sens'))  cfg.sens = Math.min(3, Math.max(.5, parseFloat(qs.get('sens'))||1.5));
+if(qs.has('flip'))  cfg.flip  = qs.get('flip')==='1';
+if(qs.has('debug')) cfg.debug = qs.get('debug')==='1';
+if(qs.has('act'))   cfg.act   = qs.get('act');
+
+// 모드: URL 파라미터가 최우선, 없으면 화면 너비 260px 이하를 워치로 판단
+var modeParam = qs.get('mode');
+var MODE = modeParam==='watch' ? 'watch'
+         : modeParam==='phone' ? 'phone'
+         : (Math.min(window.innerWidth, screen.width||9999) <= 260 ? 'watch' : 'phone');
+
+// 이미지 미리 로드 (배경이 검정인 JPG — 캔버스에 'lighten' 합성으로 그려 검정을 투명처럼 처리)
+var IMG = {};
+function img(dog){
+  if(!IMG[dog]){ IMG[dog] = new Image(); IMG[dog].src = 'assets/'+dog+'.jpg'; }
+  return IMG[dog];
+}
+
+/* ───────── 2) 센서 매니저 ─────────
+   devicemotion(가속도+중력) → 화면 좌표계 중력 벡터(gx, gy)로 변환합니다.
+   · 시작 자세를 기준점으로 잡아(base) 그 자세에서 '더 기울인 만큼'만 힘으로 씁니다.
+     → 워치를 보는 기본 자세(비스듬히 든 상태)에서 강아지가 한쪽에 박혀 있지 않습니다.
+   · status: 'idle' → 'wait' → 'on' | 'none'(이벤트 없음) | 'denied'(권한 거부)          */
+var Sensor = {
+  status:'idle', gx:0, gy:0, n:0, rawX:0, rawY:0, onShake:null,
+  _bx:0, _by:0, _lx:0, _ly:0, _lastShake:0, _bound:false,
+
+  start: function(){
+    var self = this, asks = [];
+    if(self.status==='on' || self.status==='wait') return Promise.resolve(self.status);
+    self.status = 'wait';
+    // iOS 13+/watchOS: 사용자 터치 안에서 requestPermission() 을 불러야 합니다.
+    try{
+      if(window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission==='function')
+        asks.push(DeviceMotionEvent.requestPermission());
+      if(window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission==='function')
+        asks.push(DeviceOrientationEvent.requestPermission());
+    }catch(e){}
+    return Promise.all(asks).then(function(res){
+      if(res.indexOf('denied')>=0){ self.status='denied'; return self.status; }
+      self._listen();
+      // 1.5초 동안 이벤트가 한 번도 안 오면 센서 미지원으로 보고 터치 모드로 폴백
+      return new Promise(function(done){
+        setTimeout(function(){ self.status = self.n>0 ? 'on' : 'none'; done(self.status); }, 1500);
+      });
+    }).catch(function(){ self.status='denied'; return self.status; });
+  },
+
+  _listen: function(){
+    if(this._bound) return; this._bound = true;
+    var self = this, android = /Android/i.test(navigator.userAgent);
+    window.addEventListener('devicemotion', function(e){
+      var a = e.accelerationIncludingGravity;
+      if(!a || a.x==null) return;
+      // iOS/watchOS 기준: 오른쪽으로 기울이면 x>0, 아래쪽(내 쪽)으로 기울이면 y<0. 안드로이드는 부호 반대.
+      var s = android ? -1 : 1;
+      self._feed(a.x*s, -a.y*s);
+      // 흔들기 감지: 순수 가속도가 있으면 그 크기, 없으면 중력 포함값의 급변으로 판단
+      var p = e.acceleration, mag;
+      if(p && p.x!=null) mag = Math.sqrt(p.x*p.x+p.y*p.y+p.z*p.z);
+      else mag = Math.abs(Math.sqrt(a.x*a.x+a.y*a.y+(a.z||0)*(a.z||0)) - 9.8)*1.4;
+      var now = Date.now();
+      if(mag > 13 && now-self._lastShake > 450){ self._lastShake = now; if(self.onShake) self.onShake(); }
+    });
+    // devicemotion 이 값을 안 주는 환경을 위한 보조 경로(기울기 각도 → 중력 근사)
+    window.addEventListener('deviceorientation', function(e){
+      if(self._motion || e.gamma==null) return;
+      var r = Math.PI/180;
+      self._feed(9.8*Math.sin(e.gamma*r), 9.8*Math.sin(e.beta*r), true);
+    });
+  },
+
+  _feed: function(x, y, fromOrientation){
+    if(!fromOrientation) this._motion = true;
+    if(cfg.flip){ x=-x; y=-y; }
+    this.rawX = x; this.rawY = y;
+    // 저역 통과 필터로 떨림 제거
+    this._lx += (x-this._lx)*.2; this._ly += (y-this._ly)*.2;
+    if(this.n < 12){ this._bx = this._lx; this._by = this._ly; }       // 시작 자세를 기준점으로
+    else{ this._bx += (this._lx-this._bx)*.004; this._by += (this._ly-this._by)*.004; } // 자세가 바뀌면 천천히 재보정
+    this.n++;
+    this.gx = this._lx-this._bx; this.gy = this._ly-this._by;
+    if(this.status==='wait' && this.n>3) this.status = 'on';
+  }
+};
+
+/* ───────── 3) 강아지 스테이지 (물리 엔진 + 캔버스 렌더) ─────────
+   워치 화면과 아이폰 미리보기가 같은 클래스를 사용합니다.                         */
+function Stage(canvas, opt){
+  this.c = canvas; this.g = canvas.getContext('2d');
+  this.onEvent = opt.onEvent || function(){};
+  this.showDebug = !!opt.debug;
+  this.t = 0; this.running = false;
+  this.vx = 0; this.vy = 0; this.ang = 0; this.sx = 1; this.sy = 1;
+  this.jump = 0; this.dizzy = 0; this.dizzyMeter = 0; this.asleep = false;
+  this.hearts = []; this.zs = []; this.bubble = null; this.item = null; this.hint = null;
+  this.touch = null; this._zT = 0;
+  this.resize(); this.x = this.W/2; this.y = this.H/2;
+  this._bindInput();
+  var self = this;
+  window.addEventListener('resize', function(){ self.resize(); });
+}
+Stage.prototype = {
+  resize: function(){
+    var r = this.c.getBoundingClientRect(), d = Math.min(window.devicePixelRatio||1, 2);
+    this.W = Math.max(40, r.width); this.H = Math.max(40, r.height); this.dpr = d;
+    this.c.width = Math.round(this.W*d); this.c.height = Math.round(this.H*d);
+    this.U = Math.min(this.W, this.H);        // 화면 크기 단위(워치/폰에서 같은 체감 속도)
+    this.D = this.U*.5;                       // 강아지 그림 크기
+    this.R = this.D*.4;                       // 충돌 반지름
+    if(this.x!=null){ this.x = Math.min(this.W-this.R, Math.max(this.R, this.x));
+                      this.y = Math.min(this.H-this.R, Math.max(this.R, this.y)); }
+  },
+  start: function(){
+    if(this.running) return; this.running = true;
+    var self = this, last = performance.now();
+    (function loop(now){
+      if(!self.running) return;
+      var dt = Math.min(.05, (now-last)/1000); last = now;
+      self.update(dt); self.draw();
+      requestAnimationFrame(loop);
+    })(last);
+  },
+
+  /* ── 상호작용 ── */
+  say: function(text, sec){ this.bubble = {text:text, t:sec||1.2}; },
+  hintText: function(text){ this.hint = {text:text, t:3.5}; },
+  wake: function(){ if(this.asleep){ this.asleep = false; this.say('멍!'); this.onEvent('wake'); } },
+  pet: function(){                                   // 쓰다듬기 → 하트
+    if(this.asleep){ this.wake(); return; }
+    for(var i=0;i<3;i++) this.hearts.push({x:this.x+(Math.random()-.5)*this.R, y:this.y-this.R*.6, v:this.U*(.25+Math.random()*.2), life:1, d:Math.random()*6});
+    this.sx = 1.1; this.sy = .92; this.onEvent('pet');
+  },
+  shake: function(){                                 // 흔들기 → 점프 + "멍!" , 계속 흔들면 어지러움
+    if(this.asleep){ this.wake(); return; }
+    this.jump = .45; this.dizzyMeter += 1;
+    if(this.dizzyMeter >= 4){ this.dizzy = 2.6; this.dizzyMeter = 0; this.say('어질어질~', 2); }
+    else this.say('멍!');
+    this.onEvent('shake');
+  },
+  act: function(type, px, py){                       // 케어 & 액션
+    var U = this.U, m = this.R*.6;
+    if(type==='sleep'){ this.asleep = !this.asleep; this.item = null;
+      if(this.asleep){ this.bubble = null; this.vx = this.vy = 0; } else this.say('멍!');
+      this.onEvent(this.asleep?'sleep':'wake'); return; }
+    if(this.asleep) this.wake();
+    if(type==='treat'){
+      // 강아지와 떨어진 곳에 간식을 둡니다.
+      var tx = px, ty = py, n = 0;
+      while(tx==null || (Math.abs(tx-this.x)<this.R*1.6 && Math.abs(ty-this.y)<this.R*1.6 && n++<20)){
+        tx = m+Math.random()*(this.W-2*m); ty = m+Math.random()*(this.H-2*m);
+      }
+      this.item = {type:'treat', x:tx, y:ty, vx:0, vy:0, r:U*.07};
+    }
+    if(type==='ball'){
+      var a = Math.random()*Math.PI*2;
+      this.item = {type:'ball', x:this.W/2, y:m, vx:Math.cos(a)*U*1.6, vy:Math.abs(Math.sin(a))*U*1.6+U*.5, r:U*.065};
+      this.say('!', .7);
+    }
+  },
+
+  /* ── 터치/드래그 입력 (센서가 없을 때의 폴백이자, 센서가 있어도 함께 동작) ── */
+  _bindInput: function(){
+    var self = this, c = this.c, down = null, lastTap = 0, lp = null;
+    function pos(e){ var r = c.getBoundingClientRect(), p = e.touches ? (e.touches[0]||e.changedTouches[0]) : e;
+      return {x:p.clientX-r.left, y:p.clientY-r.top}; }
+    function onDog(p){ var dx=p.x-self.x, dy=p.y-self.y; return dx*dx+dy*dy < self.R*self.R*1.5; }
+    function start(e){
+      e.preventDefault();
+      var p = pos(e); down = {x:p.x, y:p.y, t:Date.now(), moved:false, dog:onDog(p)};
+      self.touch = p;
+      clearTimeout(lp);
+      if(!down.dog) lp = setTimeout(function(){          // 빈 곳 길게 누르기 → 간식
+        if(down && !down.moved){ self.act('treat', down.x, down.y); down.used = true; self.touch = null; }
+      }, 600);
+    }
+    function move(e){
+      if(!down) return; e.preventDefault();
+      var p = pos(e);
+      if(Math.abs(p.x-down.x)+Math.abs(p.y-down.y) > 10) down.moved = true;
+      if(!down.used) self.touch = p;
+    }
+    function end(e){
+      if(!down) return; e.preventDefault(); clearTimeout(lp);
+      var d = down, now = Date.now(); down = null; self.touch = null;
+      if(d.used || d.moved || now-d.t > 500) return;
+      if(d.dog){
+        if(now-lastTap < 340){ self.shake(); lastTap = 0; }   // 두 번 탭 → "멍!"
+        else{ self.pet(); lastTap = now; }                    // 한 번 탭 → 하트
+      }else if(self.asleep) self.wake();
+    }
+    if(window.PointerEvent){
+      c.addEventListener('pointerdown', function(e){ try{ c.setPointerCapture(e.pointerId); }catch(_){} start(e); });
+      c.addEventListener('pointermove', move); c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+    }else{
+      c.addEventListener('touchstart', start, {passive:false}); c.addEventListener('touchmove', move, {passive:false});
+      c.addEventListener('touchend', end, {passive:false}); c.addEventListener('touchcancel', end, {passive:false});
+    }
+  },
+
+  /* ── 물리 업데이트 ── */
+  update: function(dt){
+    var U = this.U, R = this.R, W = this.W, H = this.H, ax = 0, ay = 0, it = this.item;
+    this.t += dt;
+    var sensorOn = Sensor.status==='on';
+
+    if(!this.asleep){
+      // (1) 중력: 기울인 방향으로 가속. 0.35m/s² 이하의 미세한 기울기는 무시(데드존)
+      if(sensorOn){
+        var gx = Sensor.gx, gy = Sensor.gy, lim = 6;
+        if(Math.abs(gx)<.35) gx = 0; if(Math.abs(gy)<.35) gy = 0;
+        ax += Math.max(-lim, Math.min(lim, gx))*cfg.sens*U*.9;
+        ay += Math.max(-lim, Math.min(lim, gy))*cfg.sens*U*.9;
+      }
+      // (2) 터치: 손가락 쪽으로 끌려옴
+      if(this.touch){
+        ax += Math.max(-U*7, Math.min(U*7, (this.touch.x-this.x)*12))*cfg.sens/1.5;
+        ay += Math.max(-U*7, Math.min(U*7, (this.touch.y-this.y)*12))*cfg.sens/1.5;
+      }
+      // (3) 센서도 터치도 없으면 간식/공을 스스로 쫓아감
+      else if(it && !sensorOn){
+        var dx = it.x-this.x, dy = it.y-this.y, dl = Math.sqrt(dx*dx+dy*dy)||1;
+        ax += dx/dl*U*2.4; ay += dy/dl*U*2.4;
+      }
+      // (4) 어지러울 때는 비틀비틀
+      if(this.dizzy>0){ ax += Math.sin(this.t*9)*U*1.2; ay += Math.cos(this.t*7)*U*1.2; }
+    }
+
+    this.vx += ax*dt; this.vy += ay*dt;
+    var f = Math.exp(-(this.asleep?6:1.8)*dt); this.vx *= f; this.vy *= f;     // 마찰(미끄러짐)
+    var sp = Math.sqrt(this.vx*this.vx+this.vy*this.vy), max = U*4;
+    if(sp>max){ this.vx *= max/sp; this.vy *= max/sp; sp = max; }
+    this.x += this.vx*dt; this.y += this.vy*dt;
+
+    // (5) 벽 충돌: 튕기면서 찌그러짐
+    var e = .55, hit = 0;
+    if(this.x<R){ this.x=R; hit=Math.max(hit,-this.vx); if(this.vx<0){ this._sq(-this.vx,'x'); this.vx*=-e; } }
+    if(this.x>W-R){ this.x=W-R; hit=Math.max(hit,this.vx); if(this.vx>0){ this._sq(this.vx,'x'); this.vx*=-e; } }
+    if(this.y<R){ this.y=R; if(this.vy<0){ this._sq(-this.vy,'y'); this.vy*=-e; } }
+    if(this.y>H-R){ this.y=H-R; if(this.vy>0){ this._sq(this.vy,'y'); this.vy*=-e; } }
+
+    // (6) 굴러가기: 빠르면 구르고, 멈추면 다시 똑바로
+    if(sp > U*.12) this.ang += this.vx/R*dt*.55;
+    else{ var near = Math.round(this.ang/(Math.PI*2))*Math.PI*2; this.ang += (near-this.ang)*Math.min(1, 7*dt); }
+    this.sx += (1-this.sx)*Math.min(1, 9*dt); this.sy += (1-this.sy)*Math.min(1, 9*dt);
+
+    if(this.jump>0) this.jump = Math.max(0, this.jump-dt);
+    if(this.dizzy>0) this.dizzy = Math.max(0, this.dizzy-dt);
+    this.dizzyMeter = Math.max(0, this.dizzyMeter-dt*.7);
+
+    // (7) 간식 / 공
+    if(it){
+      if(it.type==='ball'){
+        it.x += it.vx*dt; it.y += it.vy*dt; var bf = Math.exp(-.5*dt); it.vx*=bf; it.vy*=bf;
+        if(it.x<it.r){ it.x=it.r; it.vx=Math.abs(it.vx)*.85; } if(it.x>W-it.r){ it.x=W-it.r; it.vx=-Math.abs(it.vx)*.85; }
+        if(it.y<it.r){ it.y=it.r; it.vy=Math.abs(it.vy)*.85; } if(it.y>H-it.r){ it.y=H-it.r; it.vy=-Math.abs(it.vy)*.85; }
+      }
+      var ddx = it.x-this.x, ddy = it.y-this.y, rr = R*.85+it.r;
+      if(ddx*ddx+ddy*ddy < rr*rr){
+        this.item = null;
+        if(it.type==='treat'){ this.say('냠!'); this.sx=1.12; this.sy=.9; this.onEvent('treat'); }
+        else{ this.say('잡았다!'); this.jump=.45; this.onEvent('ball'); }
+        for(var i=0;i<2;i++) this.hearts.push({x:this.x+(Math.random()-.5)*R, y:this.y-R*.6, v:U*.3, life:1, d:Math.random()*6});
+      }
+    }
+
+    // (8) 파티클 수명
+    for(var h=this.hearts.length-1;h>=0;h--){ var o=this.hearts[h]; o.y-=o.v*dt; o.life-=dt*.9; if(o.life<=0) this.hearts.splice(h,1); }
+    if(this.asleep){ this._zT -= dt; if(this._zT<=0){ this._zT=.9; this.zs.push({x:this.x+R*.5, y:this.y-R*.6, life:1}); } }
+    for(var z=this.zs.length-1;z>=0;z--){ var q=this.zs[z]; q.y-=U*.12*dt; q.x+=U*.05*dt; q.life-=dt*.5; if(q.life<=0) this.zs.splice(z,1); }
+    if(this.bubble && (this.bubble.t-=dt)<=0) this.bubble = null;
+    if(this.hint && (this.hint.t-=dt)<=0) this.hint = null;
+  },
+  _sq: function(v, axis){                      // 충돌 세기에 비례해 찌그러뜨림
+    var a = Math.min(.28, v/(this.U*7)); if(a<.04) return;
+    if(axis==='x'){ this.sx = 1-a; this.sy = 1+a*.7; } else { this.sy = 1-a; this.sx = 1+a*.7; }
+  },
+
+  /* ── 렌더 ── */
+  draw: function(){
+    var g = this.g, d = this.dpr, W = this.W, H = this.H, D = this.D, R = this.R, t = this.t;
+    g.setTransform(d,0,0,d,0,0);
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+    g.fillStyle = '#000'; g.fillRect(0,0,W,H);             // OLED 절전: 순수 검정
+
+    if(this.item) this._drawItem(this.item);
+
+    // 강아지: 숨쉬기(스케일) + 갸웃거림(멈춰 있을 때) + 점프 + 찌그러짐 + 굴림
+    var moving = Math.abs(this.vx)+Math.abs(this.vy) > this.U*.12;
+    var breathe = 1+Math.sin(t*(this.asleep?1.2:2.3))*(this.asleep?.035:.022);
+    var wobble = this.asleep ? .22 : (moving ? 0 : Math.sin(t*1.4)*.06);
+    if(this.dizzy>0) wobble += Math.sin(t*11)*.16;
+    var jp = this.jump>0 ? Math.sin(Math.PI*(1-this.jump/.45)) : 0;
+    var sc = breathe*(1+jp*.22);
+    g.save();
+    g.translate(this.x, this.y-jp*R*.35);
+    g.rotate(this.ang+wobble);
+    g.scale(this.sx*sc, this.sy*sc);
+    var im = img(cfg.dog);
+    if(im.complete && im.naturalWidth){
+      g.globalAlpha = this.asleep ? .5 : 1;
+      g.globalCompositeOperation = 'lighten';              // 사진의 검정 배경이 다른 그림을 덮지 않게
+      g.drawImage(im, -D/2, -D/2, D, D);
+      g.globalCompositeOperation = 'source-over';
+      this._drawAcc(D, DOGS[cfg.dog]);
+      g.globalAlpha = 1;
+    }
+    g.restore();
+
+    // 어지러움: 머리 위 별
+    if(this.dizzy>0) for(var i=0;i<3;i++){
+      var a = t*5+i*2.09; this._star(this.x+Math.cos(a)*R*.8, this.y-R*1.05+Math.sin(a)*R*.18, R*.16);
+    }
+    // 하트 / Zzz
+    for(var h=0;h<this.hearts.length;h++){ var o=this.hearts[h]; g.globalAlpha=Math.min(1,o.life*1.6);
+      this._heart(o.x+Math.sin(t*4+o.d)*4, o.y, R*.26); }
+    g.fillStyle = '#cfd8ff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for(var z=0;z<this.zs.length;z++){ var q=this.zs[z]; g.globalAlpha=Math.min(1,q.life*1.5);
+      g.font = '700 '+Math.round(R*(.3+ (1-q.life)*.25))+'px -apple-system,sans-serif'; g.fillText('z', q.x, q.y); }
+    g.globalAlpha = 1;
+
+    if(this.bubble) this._bubble(this.bubble.text);
+    if(this.hint){ g.globalAlpha = Math.min(1,this.hint.t)*.75; g.fillStyle='#bbb';
+      g.font = '600 '+Math.max(11,Math.round(this.U*.058))+'px -apple-system,sans-serif';
+      g.fillText(this.hint.text, W/2, H-Math.max(12,this.U*.07)); g.globalAlpha = 1; }
+    if(this.showDebug) this._debug();
+  },
+
+  // 악세서리(벡터). u,v 는 이미지 안 0~1 좌표 → 강아지 로컬 좌표로 변환
+  _drawAcc: function(D, dog){
+    var g = this.g, acc = cfg.acc;
+    function X(u){ return -D/2+u*D; } function Y(v){ return -D/2+v*D; }
+    if(acc==='hat'){                                   // 고깔모자
+      var by = dog.top+.055, ty = by-.25;
+      g.fillStyle = '#e8503a'; g.beginPath(); g.moveTo(X(.5),Y(ty)); g.lineTo(X(.385),Y(by)); g.lineTo(X(.615),Y(by)); g.closePath(); g.fill();
+      g.strokeStyle = '#ffd35a'; g.lineWidth = D*.022; g.beginPath();
+      g.moveTo(X(.447),Y(by-.115)); g.lineTo(X(.553),Y(by-.115)); g.stroke();
+      g.fillStyle = '#fff'; g.beginPath(); g.ellipse(X(.5),Y(by),D*.125,D*.026,0,0,Math.PI*2); g.fill();
+      g.beginPath(); g.arc(X(.5),Y(ty),D*.034,0,Math.PI*2); g.fill();
+    }
+    if(acc==='scarf'){                                 // 턱 밑 스카프
+      var cy = dog.chin;
+      g.fillStyle = '#d8433b'; g.beginPath();
+      g.moveTo(X(.29),Y(cy-.15)); g.quadraticCurveTo(X(.5),Y(cy-.035),X(.71),Y(cy-.15));
+      g.quadraticCurveTo(X(.5),Y(cy+.115),X(.29),Y(cy-.15)); g.fill();
+      g.fillStyle = '#fff';
+      [[.42,-.07],[.5,-.052],[.58,-.07]].forEach(function(p){ g.beginPath(); g.arc(X(p[0]),Y(cy+p[1]),D*.012,0,Math.PI*2); g.fill(); });
+    }
+    if(acc==='ribbon'){                                // 머리 리본
+      var rx = X(.665), ry = Y(dog.top+.085), s = D*.085;
+      g.save(); g.translate(rx,ry); g.rotate(.35); g.fillStyle = '#ff7fa8';
+      g.beginPath(); g.moveTo(0,0); g.lineTo(-s,-s*.62); g.lineTo(-s,s*.62); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(0,0); g.lineTo(s,-s*.62); g.lineTo(s,s*.62); g.closePath(); g.fill();
+      g.fillStyle = '#ff4f86'; g.beginPath(); g.arc(0,0,s*.3,0,Math.PI*2); g.fill(); g.restore();
+    }
+  },
+  _drawItem: function(it){
+    var g = this.g, r = it.r;
+    g.save(); g.translate(it.x, it.y);
+    if(it.type==='treat'){                             // 뼈다귀
+      g.rotate(-.5); g.fillStyle = '#f1e3c6';
+      g.fillRect(-r*.8,-r*.26,r*1.6,r*.52);
+      [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(function(p){ g.beginPath(); g.arc(p[0]*r*.85,p[1]*r*.3,r*.36,0,Math.PI*2); g.fill(); });
+    }else{                                             // 테니스공
+      g.rotate(this.t*4); g.fillStyle = '#cfe23f'; g.beginPath(); g.arc(0,0,r,0,Math.PI*2); g.fill();
+      g.strokeStyle = '#fff'; g.lineWidth = r*.16; g.beginPath(); g.arc(-r*1.1,0,r*.9,-.75,.75); g.stroke();
+      g.beginPath(); g.arc(r*1.1,0,r*.9,Math.PI-.75,Math.PI+.75); g.stroke();
+    }
+    g.restore();
+  },
+  _heart: function(x,y,s){
+    var g = this.g; g.fillStyle = '#ff5d7a'; g.beginPath();
+    g.moveTo(x, y+s*.35);
+    g.bezierCurveTo(x-s*.9,y-s*.2, x-s*.45,y-s*.85, x,y-s*.3);
+    g.bezierCurveTo(x+s*.45,y-s*.85, x+s*.9,y-s*.2, x,y+s*.35); g.fill();
+  },
+  _star: function(x,y,s){
+    var g = this.g; g.fillStyle = '#ffd84a'; g.beginPath();
+    for(var i=0;i<10;i++){ var a=-Math.PI/2+i*Math.PI/5, r=i%2?s*.45:s; g.lineTo(x+Math.cos(a)*r, y+Math.sin(a)*r); }
+    g.closePath(); g.fill();
+  },
+  _bubble: function(text){                             // 말풍선: 화면 밖으로 나가지 않게 위치 보정
+    var g = this.g, fs = Math.max(13, Math.round(this.U*.085));
+    g.font = '800 '+fs+'px -apple-system,"Apple SD Gothic Neo",sans-serif';
+    var w = g.measureText(text).width+fs*1.1, h = fs*1.75;
+    var above = this.y-this.R*1.25-h > 2;
+    var bx = Math.min(this.W-w-3, Math.max(3, this.x-w/2));
+    var by = above ? this.y-this.R*1.25-h : Math.min(this.H-h-3, this.y+this.R*1.2);
+    g.fillStyle = '#fff'; g.beginPath();
+    var r = h/2; g.moveTo(bx+r,by); g.arcTo(bx+w,by,bx+w,by+h,r); g.arcTo(bx+w,by+h,bx,by+h,r);
+    g.arcTo(bx,by+h,bx,by,r); g.arcTo(bx,by,bx+w,by,r); g.fill();
+    g.fillStyle = '#111'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, bx+w/2, by+h/2+1);
+  },
+  _debug: function(){                                  // ?debug=1 : 워치에서 센서가 잡히는지 눈으로 확인
+    var g = this.g, fs = Math.max(9, Math.round(this.U*.05)), s = Sensor;
+    var lines = ['센서 '+s.status+' n='+s.n, 'x '+s.rawX.toFixed(1)+' y '+s.rawY.toFixed(1),
+                 '화면 '+Math.round(this.W)+'x'+Math.round(this.H)+' @'+this.dpr];
+    g.font = '600 '+fs+'px ui-monospace,Menlo,monospace'; g.textAlign = 'left'; g.textBaseline = 'top';
+    g.fillStyle = s.status==='on' ? '#5fd38a' : '#ffb86b';
+    for(var i=0;i<lines.length;i++) g.fillText(lines[i], 6, 6+i*fs*1.3);
+  }
+};
+
+/* ───────── 오늘의 활동량 (기기별 localStorage, 날짜가 바뀌면 초기화) ───────── */
+var today = new Date(); today = today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+var stats = store.get('mw.stats'); if(!stats || stats.day!==today) stats = {day:today, shake:0, pet:0, treat:0, ball:0};
+function count(type){
+  if(stats[type]==null) return;
+  stats[type]++; store.set('mw.stats', stats);
+  var el = document.getElementById('s-'+type); if(el) el.textContent = stats[type];
+  Sync.push(type);
+}
+
+/* ───────── 6) SYNC (선택): 아이폰 ↔ 워치 실시간 동기화를 붙일 자리 ─────────
+   기본은 아무 일도 하지 않습니다(서버·계정 없이 URL 파라미터만으로 동작).
+   실시간 원격 조작(아이폰에서 간식 → 워치 강아지가 즉시 반응)과 워치 활동량 합산이
+   필요해지면 아래 스니펫의 주석을 풀고 Sync.push / Sync.listen 을 채우세요.
+
+   ── Firebase Realtime Database 예시 ──────────────────────────────────
+   1) <head> 에 추가:
+      <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"><\/script>
+      <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"><\/script>
+   2) 링크에 방 이름을 추가: ?room=내강아지1234  (아이폰·워치가 같은 room 을 쓰면 연결됨)
+   3) 아래 코드로 교체:
+      firebase.initializeApp({ apiKey:'...', databaseURL:'https://<프로젝트>.firebasedatabase.app' });
+      var ref = firebase.database().ref('rooms/' + (qs.get('room') || 'default'));
+      Sync.push   = function(type){ ref.child('stats/'+today+'/'+type).set(firebase.database.ServerValue.increment(1)); };
+      Sync.send   = function(act){ ref.child('action').set({act:act, at:Date.now()}); };         // 아이폰 → 워치
+      Sync.listen = function(onAct){ ref.child('action').on('value', function(s){
+                      var v = s.val(); if(v && Date.now()-v.at < 5000) onAct(v.act); }); };      // 워치에서 수신
+      (설정 동기화: ref.child('cfg').set(cfg) / ref.child('cfg').on('value', ...) 로 같은 방식)
+
+   ── Supabase 로 할 경우 ──────────────────────────────────────────────
+      supabase.channel('room').on('broadcast', {event:'act'}, p => onAct(p.payload.act)).subscribe();
+      channel.send({type:'broadcast', event:'act', payload:{act:'treat'}});
+   ──────────────────────────────────────────────────────────────────── */
+var Sync = { push:function(){}, send:function(){}, listen:function(){} };
+
+/* ───────── 4) 워치 모드 ───────── */
+function initWatch(){
+  document.body.className = 'watch';
+  var root = document.getElementById('watch'); root.hidden = false;
+  document.title = cfg.name;
+  document.getElementById('startImg').src = 'assets/'+cfg.dog+'.jpg';
+  // 넓은 화면에서 테스트 중일 때만 폰 모드로 돌아가는 버튼 표시
+  if(window.innerWidth > 260){ var b = document.getElementById('toPhone'); b.hidden = false;
+    b.onclick = function(){ go('phone'); }; }
+  // 스크롤/바운스/디지털 크라운 스크롤 차단
+  document.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive:false});
+
+  var stage = new Stage(document.getElementById('watchCanvas'), {debug:cfg.debug, onEvent:count});
+  Sensor.onShake = function(){ stage.shake(); };
+  Sync.listen(function(act){ stage.act(act); });
+
+  document.getElementById('startBtn').onclick = function(){
+    var p = Sensor.start();                     // ← 반드시 터치 핸들러 안에서 호출(권한 정책)
+    document.getElementById('start').hidden = true;
+    stage.resize(); stage.x = stage.W/2; stage.y = stage.H/2;
+    stage.start(); stage.say(cfg.name+'!', 1.4);
+    p.then(function(st){ stage.hintText(st==='on' ? '손목을 기울여 보세요' : '드래그로 놀아요'); });
+    if(cfg.act) setTimeout(function(){ stage.act(cfg.act); }, 1600);
+  };
+}
+
+/* ───────── 5) 아이폰 컨트롤 타워 모드 ───────── */
+function initPhone(){
+  document.body.className = 'phone';
+  document.getElementById('phone').hidden = false;
+  var $ = function(id){ return document.getElementById(id); };
+
+  var stage = new Stage($('previewCanvas'), {onEvent:function(type){
+    count(type);
+    if(type==='sleep' || type==='wake') $('sleepBtn').innerHTML = stage.asleep ? '<b>🌞</b>깨우기' : '<b>😴</b>재우기';
+  }});
+  stage.start();
+  Sensor.onShake = function(){ stage.shake(); };
+
+  // 견종 / 악세서리 버튼 생성
+  Object.keys(DOGS).forEach(function(k){
+    var b = document.createElement('button'); b.dataset.dog = k;
+    b.innerHTML = '<img src="assets/'+k+'.jpg" alt="">'+DOGS[k].label;
+    b.onclick = function(){ cfg.dog = k; render(); stage.say('멍!'); };
+    $('dogs').appendChild(b);
+  });
+  Object.keys(ACCS).forEach(function(k){
+    var b = document.createElement('button'); b.dataset.acc = k; b.textContent = ACCS[k];
+    b.onclick = function(){ cfg.acc = k; render(); };
+    $('accs').appendChild(b);
+  });
+
+  // 워치용 링크 조합: 한글 이름은 URLSearchParams 가 자동으로 인코딩합니다.
+  var isFile = location.protocol==='file:';
+  $('base').value = store.get('mw.base') || (isFile ? '' : location.origin+location.pathname);
+  function watchUrl(){
+    var p = new URLSearchParams({mode:'watch', name:cfg.name, dog:cfg.dog, sens:String(cfg.sens)});
+    if(cfg.acc!=='none') p.set('acc', cfg.acc);
+    if(cfg.act) p.set('act', cfg.act);
+    if(cfg.flip) p.set('flip','1');
+    if(cfg.debug) p.set('debug','1');
+    var base = ($('base').value.trim() || 'https://<아이디>.github.io/<저장소>/').split('?')[0];
+    return base+'?'+p.toString();
+  }
+
+  // 화면 갱신 + 설정 저장
+  function render(){
+    $('title').textContent = cfg.name || '강아지';
+    document.title = (cfg.name||'멍워치')+' 컨트롤 타워';
+    $('sensVal').textContent = '×'+Number(cfg.sens).toFixed(1);
+    [].forEach.call($('dogs').children, function(b){ b.setAttribute('aria-pressed', b.dataset.dog===cfg.dog); });
+    [].forEach.call($('accs').children, function(b){ b.setAttribute('aria-pressed', b.dataset.acc===cfg.acc); });
+    var u = watchUrl();
+    $('url').textContent = u;
+    $('sms').href = 'sms:&body='+encodeURIComponent(u);
+    $('baseWarn').hidden = !!$('base').value.trim();
+    store.set('mw.cfg', cfg);
+  }
+
+  $('name').value = cfg.name; $('sens').value = cfg.sens; $('act').value = cfg.act;
+  $('flip').checked = cfg.flip; $('debug').checked = cfg.debug;
+  $('name').oninput  = function(){ cfg.name = this.value.trim().slice(0,8) || '강아지'; render(); };
+  $('sens').oninput  = function(){ cfg.sens = parseFloat(this.value); render(); };
+  $('act').onchange  = function(){ cfg.act = this.value; render(); };
+  $('flip').onchange = function(){ cfg.flip = this.checked; render(); };
+  $('debug').onchange= function(){ cfg.debug = this.checked; render(); };
+  $('base').oninput  = function(){ store.set('mw.base', this.value.trim()); render(); };
+
+  // 케어 & 액션: 미리보기 강아지에 즉시 반영 (+ SYNC 연결 시 워치로도 전송)
+  [].forEach.call(document.querySelectorAll('[data-act]'), function(b){
+    b.onclick = function(){ stage.act(b.dataset.act); Sync.send(b.dataset.act); };
+  });
+
+  // 아이폰에서도 기울임으로 놀 수 있게(센서 동작을 워치에 올리기 전에 먼저 확인하는 용도)
+  $('tiltBtn').onclick = function(){
+    var b = this; b.textContent = '확인 중…';
+    Sensor.start().then(function(st){
+      b.textContent = st==='on' ? '기울임 켜짐' : st==='denied' ? '권한 거부됨' : '센서 없음 · 터치로';
+      if(st==='on'){ b.style.color = 'var(--ok)'; stage.hintText('기울이거나 흔들어 보세요'); }
+    });
+  };
+
+  // 링크 복사 (clipboard API 가 막힌 환경을 위한 폴백 포함)
+  $('copy').onclick = function(){
+    var u = watchUrl(), b = this;
+    function ok(){ b.textContent = '복사됨 ✓'; setTimeout(function(){ b.textContent = '워치용 링크 복사'; }, 1600); }
+    function fallback(){
+      var t = document.createElement('textarea'); t.value = u; t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select(); t.setSelectionRange(0, 9999);
+      try{ document.execCommand('copy'); ok(); }catch(e){ b.textContent = '길게 눌러 직접 복사해 주세요'; }
+      document.body.removeChild(t);
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(u).then(ok, fallback);
+    else fallback();
+  };
+
+  $('toWatch').onclick = function(){ location.href = watchUrl().replace(/^[^?]*/, location.pathname); };
+  $('today').textContent = today;
+  ['shake','pet','treat','ball'].forEach(function(k){ $('s-'+k).textContent = stats[k]; });
+  render();
+}
+
+// 모드 강제 전환(테스트용)
+function go(mode){ var p = new URLSearchParams(location.search); p.set('mode', mode); location.search = p.toString(); }
+
+if(MODE==='watch') initWatch(); else initPhone();
+})();
+</script>
+</body>
+</html>

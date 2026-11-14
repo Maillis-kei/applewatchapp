@@ -23,6 +23,8 @@
   /* ───────── 워치 모드: 스크롤 원천 차단 + 순수 검정(OLED 절전) ───────── */
   body.watch{position:fixed;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;
     overflow:hidden;background:#000;touch-action:none;-webkit-user-select:none;user-select:none}
+  /* 실험 옵션(bar=1): 페이지를 조금 길게 만들어 스크롤되게 하면 브라우저가 주소창을 접을 수 있음. 캔버스는 고정 */
+  body.watch.scrolly{position:static;height:calc(100vh + 160px);overflow-y:auto;touch-action:auto}
   #watch{position:fixed;top:0;left:0;right:0;bottom:0;background:#000;overflow:hidden}
   #watchCanvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:none}
   #start{position:absolute;top:0;left:0;right:0;bottom:0;background:#000;
@@ -146,14 +148,17 @@
       <option value="ball">공 던지기</option>
       <option value="sleep">자는 상태로 시작</option>
     </select>
-    <label class="f" for="top">위쪽 여백 — 워치 주소창에 가려지지 않게 <b id="topVal"></b></label>
+    <label class="f" for="top">위쪽 여백 — 주소창에 가려질 때만 올리세요 <b id="topVal"></b></label>
     <input type="range" id="top" min="0" max="120" step="4">
     <div class="row">
       <label class="chk"><input type="checkbox" id="flip">기울임 방향 반대로</label>
       <label class="chk"><input type="checkbox" id="debug">센서 진단 표시</label>
+      <label class="chk"><input type="checkbox" id="bar">주소창 밀어내기 (실험)</label>
     </div>
     <div class="url" id="url"></div>
     <button class="btn" id="copy">워치용 링크 복사</button>
+    <button class="btn ghost" id="mk">단축어 만들기 (링크 복사 + 단축어 앱 열기)</button>
+    <p class="note" id="mkNote" hidden>링크가 복사됐습니다. 단축어 앱이 열리면 ① 동작 추가에서 <b>URL의 웹 페이지 보기</b> 선택 ② URL 칸에 <b>붙여넣기</b> ③ ⓘ에서 <b>Apple Watch에 표시</b> 켜기 ④ 완료.</p>
     <a class="btn ghost" id="sms">메시지로 나에게 보내기</a>
     <p class="note warn" id="baseWarn" hidden>지금은 로컬 파일로 열려 있습니다. 워치에서 열려면 GitHub Pages 주소를 '배포 주소'에 넣어 주세요.</p>
   </div>
@@ -216,7 +221,7 @@ var store = {            // localStorage 는 워치에서 지워질 수 있으�
 };
 
 // 우선순위: 기본값 < 저장된 값(아이폰) < URL 파라미터(워치는 이것만으로 100% 동작)
-var cfg = {name:'초코', dog:'shiba', acc:'none', sens:1.5, flip:false, debug:false, act:'', top:44};
+var cfg = {name:'초코', dog:'shiba', acc:'none', sens:1.5, flip:false, debug:false, act:'', top:0, bar:false};
 var saved = store.get('mw.cfg'); if(saved) for(var k in cfg) if(saved[k]!=null) cfg[k]=saved[k];
 if(qs.get('name'))  cfg.name = qs.get('name').slice(0,8);
 if(DOGS[qs.get('dog')]) cfg.dog = qs.get('dog');
@@ -226,6 +231,7 @@ if(qs.has('flip'))  cfg.flip  = qs.get('flip')==='1';
 if(qs.has('debug')) cfg.debug = qs.get('debug')==='1';
 if(qs.has('act'))   cfg.act   = qs.get('act');
 // top: 워치 브라우저의 닫기 버튼·주소창이 화면 위를 덮으므로 그만큼 위쪽을 비워 둡니다(px)
+if(qs.has('bar'))   cfg.bar   = qs.get('bar')==='1';
 if(qs.has('top'))   cfg.top   = Math.min(120, Math.max(0, parseInt(qs.get('top'),10)||0));
 
 // 모드: URL 파라미터가 최우선, 없으면 화면 너비 260px 이하를 워치로 판단
@@ -467,7 +473,7 @@ Stage.prototype = {
     var e = .55, hit = 0;
     if(this.x<R){ this.x=R; hit=Math.max(hit,-this.vx); if(this.vx<0){ this._sq(-this.vx,'x'); this.vx*=-e; } }
     if(this.x>W-R){ this.x=W-R; hit=Math.max(hit,this.vx); if(this.vx>0){ this._sq(this.vx,'x'); this.vx*=-e; } }
-    var Rt = this.top ? this.D*.48 : R;        // 주소창 아래에서는 머리 끝까지 보이게 여유를 둠
+    var Rt = this.D*.46;                       // 위쪽은 귀·머리 끝이 화면(주소창) 밖으로 나가지 않게 여유를 둠
     if(this.y<this.top+Rt){ this.y=this.top+Rt; if(this.vy<0){ this._sq(-this.vy,'y'); this.vy*=-e; } }
     if(this.y>H-R){ this.y=H-R; if(this.vy>0){ this._sq(this.vy,'y'); this.vy*=-e; } }
 
@@ -476,10 +482,14 @@ Stage.prototype = {
     if(this.touch){ ty += (this.touch.x-this.x)/(U*.6); tp += (this.touch.y-this.y)/(U*.6); }
     else if(idle && !this.asleep){ ty += Math.sin(this.t*.7)*.45; tp += Math.sin(this.t*.53+1)*.25; }
     if(this.asleep){ ty = 0; tp = .5; }
-    ty = Math.max(-1, Math.min(1, ty)); tp = Math.max(-1, Math.min(1, tp));
+    // 빠를수록 1 에 가까워지는 값: 빠르면 데굴데굴 구르고, 느리면 진행 방향을 바라봄
+    var fast = this.asleep ? 0 : Math.max(0, Math.min(1, (sp-U*.7)/(U*.7)));
+    ty = Math.max(-1, Math.min(1, ty))*(1-fast); tp = Math.max(-1, Math.min(1, tp))*(1-fast);
     this.yaw += (ty-this.yaw)*k; this.pitch += (tp-this.pitch)*k;
-    var ta = Math.max(-1, Math.min(1, this.vx/(U*2)))*.32;
-    this.ang += (ta-this.ang)*k;
+    if(fast > 0) this.ang += this.vx/R*dt*.5*fast;                       // 구르기
+    var up = Math.round(this.ang/(Math.PI*2))*Math.PI*2                   // 가장 가까운 '똑바로' 각도
+           + Math.max(-1, Math.min(1, this.vx/(U*2)))*.32;                // + 진행 방향으로 살짝 기울임
+    this.ang += (up-this.ang)*k*(1-fast);
 
     // (6-1) 눈 깜빡임: 2.5~5.5초마다 한 번(가끔 두 번). 잘 때는 감고, 쓰다듬으면 지그시
     var lidT = 0;
@@ -757,7 +767,8 @@ function initWatch(){
   if(VIEW_W === 0 || VIEW_W > 260){ var b = document.getElementById('toPhone'); b.hidden = false;
     b.onclick = function(){ go('phone'); }; }
   // 스크롤/바운스/디지털 크라운 스크롤 차단
-  document.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive:false});
+  if(cfg.bar) document.body.className = 'watch scrolly';
+  else document.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive:false});
 
   var stage = new Stage(document.getElementById('watchCanvas'), {debug:cfg.debug, top:cfg.top, onEvent:count});
   Sensor.onShake = function(){ stage.shake(); };
@@ -770,6 +781,10 @@ function initWatch(){
     stage.start(); stage.say(cfg.name+'!', 1.4);
     p.then(function(st){ stage.hintText(st==='on' ? '손목을 기울여 보세요' : '드래그로 놀아요'); });
     if(cfg.act) setTimeout(function(){ stage.act(cfg.act); }, 1600);
+    if(cfg.bar){                                 // 주소창 밀어내기: 살짝 스크롤 → 화면 크기가 바뀌면 다시 맞춤
+      setTimeout(function(){ window.scrollTo(0, 160); }, 80);
+      if(window.visualViewport) window.visualViewport.addEventListener('resize', function(){ stage.resize(); });
+    }
   };
 }
 
@@ -803,11 +818,13 @@ function initPhone(){
   var isFile = location.protocol==='file:';
   $('base').value = store.get('mw.base') || (isFile ? '' : location.origin+location.pathname);
   function watchUrl(){
-    var p = new URLSearchParams({mode:'watch', name:cfg.name, dog:cfg.dog, sens:String(cfg.sens), top:String(cfg.top)});
+    var p = new URLSearchParams({mode:'watch', name:cfg.name, dog:cfg.dog, sens:String(cfg.sens)});
     if(cfg.acc!=='none') p.set('acc', cfg.acc);
     if(cfg.act) p.set('act', cfg.act);
     if(cfg.flip) p.set('flip','1');
     if(cfg.debug) p.set('debug','1');
+    if(cfg.bar) p.set('bar','1');
+    if(cfg.top) p.set('top', String(cfg.top));
     var base = ($('base').value.trim() || 'https://<아이디>.github.io/<저장소>/').split('?')[0];
     return base+'?'+p.toString();
   }
@@ -828,13 +845,14 @@ function initPhone(){
   }
 
   $('name').value = cfg.name; $('sens').value = cfg.sens; $('act').value = cfg.act;
-  $('flip').checked = cfg.flip; $('debug').checked = cfg.debug; $('top').value = cfg.top;
+  $('flip').checked = cfg.flip; $('debug').checked = cfg.debug; $('top').value = cfg.top; $('bar').checked = cfg.bar;
   $('name').oninput  = function(){ cfg.name = this.value.trim().slice(0,8) || '강아지'; render(); };
   $('sens').oninput  = function(){ cfg.sens = parseFloat(this.value); render(); };
   $('act').onchange  = function(){ cfg.act = this.value; render(); };
   $('top').oninput   = function(){ cfg.top = parseInt(this.value,10); render(); };
   $('flip').onchange = function(){ cfg.flip = this.checked; render(); };
   $('debug').onchange= function(){ cfg.debug = this.checked; render(); };
+  $('bar').onchange  = function(){ cfg.bar = this.checked; render(); };
   $('base').oninput  = function(){ store.set('mw.base', this.value.trim()); render(); };
 
   // 케어 & 액션: 미리보기 강아지에 즉시 반영 (+ SYNC 연결 시 워치로도 전송)
@@ -852,17 +870,28 @@ function initPhone(){
   };
 
   // 링크 복사 (clipboard API 가 막힌 환경을 위한 폴백 포함)
-  $('copy').onclick = function(){
-    var u = watchUrl(), b = this;
-    function ok(){ b.textContent = '복사됨 ✓'; setTimeout(function(){ b.textContent = '워치용 링크 복사'; }, 1600); }
+  function copyLink(done){
+    var u = watchUrl();
     function fallback(){
       var t = document.createElement('textarea'); t.value = u; t.style.position = 'fixed'; t.style.opacity = '0';
       document.body.appendChild(t); t.select(); t.setSelectionRange(0, 9999);
-      try{ document.execCommand('copy'); ok(); }catch(e){ b.textContent = '길게 눌러 직접 복사해 주세요'; }
-      document.body.removeChild(t);
+      var ok = false; try{ ok = document.execCommand('copy'); }catch(e){}
+      document.body.removeChild(t); done(ok);
     }
-    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(u).then(ok, fallback);
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(u).then(function(){ done(true); }, fallback);
     else fallback();
+  }
+  $('copy').onclick = function(){
+    var b = this;
+    copyLink(function(ok){
+      b.textContent = ok ? '복사됨 ✓' : '위 주소를 길게 눌러 직접 복사해 주세요';
+      setTimeout(function(){ b.textContent = '워치용 링크 복사'; }, 1800);
+    });
+  };
+  // 단축어 만들기: 링크를 복사한 뒤 단축어 앱의 '새 단축어' 화면을 엽니다.
+  // (웹 페이지가 단축어를 대신 만들어 넣을 수는 없습니다 — Apple 이 서명된 단축어 파일만 설치를 허용)
+  $('mk').onclick = function(){
+    copyLink(function(){ $('mkNote').hidden = false; setTimeout(function(){ location.href = 'shortcuts://create-shortcut'; }, 400); });
   };
 
   $('toWatch').onclick = function(){ location.href = watchUrl().replace(/^[^?]*/, location.pathname); };

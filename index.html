@@ -197,12 +197,15 @@
 // 견종 데이터. top/chin 은 이미지(정사각형) 안에서 머리 꼭대기·턱의 세로 위치(0~1).
 // 악세서리를 견종마다 알맞은 자리에 그리기 위한 값입니다.
 var DOGS = {
-  shiba:  {label:'시바',     top:.175, chin:.972},
-  bichon: {label:'비숑',     top:.033, chin:.954},
-  poodle: {label:'푸들',     top:.054, chin:.877},
-  corgi:  {label:'코기',     top:.251, chin:.984},
-  husky:  {label:'허스키',   top:.225, chin:.970},
-  golden: {label:'리트리버', top:.041, chin:.983}
+  // eyes: [가로중심, 세로중심, 가로반지름, 세로반지름, 눈꺼풀 위쪽 색, 아래쪽 색] (좌표는 이미지 안 0~1)
+  //       색은 각 눈 주변 털에서 뽑은 값이라 조명(그늘)까지 자연스럽게 맞습니다.
+  // mouth: 이 세로 위치 아래쪽(턱)을 늘이고 줄여 입을 움직입니다.
+  shiba:  {label:'시바',     top:.175, chin:.972, mouth:.66, eyes:[[.368,.438,.058,.054,'#d28a4f','#e4a671'],[.660,.458,.058,.054,'#f9c791','#fdd7b3']]},
+  bichon: {label:'비숑',     top:.033, chin:.954, mouth:.67, eyes:[[.375,.515,.056,.054,'#cbc1bb','#f1ecea'],[.634,.487,.056,.054,'#d6cac1','#ede7e3']]},
+  poodle: {label:'푸들',     top:.054, chin:.877, mouth:.67, eyes:[[.375,.486,.054,.052,'#bf703a','#fba975'],[.648,.467,.054,.052,'#b05d1f','#e58741']]},
+  corgi:  {label:'코기',     top:.251, chin:.984, mouth:.71, eyes:[[.390,.516,.068,.068,'#c5936a','#e7d6cf'],[.644,.516,.068,.068,'#e5b17e','#fcf2e9']]},
+  husky:  {label:'허스키',   top:.225, chin:.970, mouth:.73, eyes:[[.402,.504,.058,.055,'#e3d2cc','#e0d3d2'],[.650,.493,.058,.055,'#f8ede5','#f9f1ee']]},
+  golden: {label:'리트리버', top:.041, chin:.983, mouth:.58, eyes:[[.365,.297,.052,.048,'#c8802e','#d48e3b'],[.645,.295,.052,.048,'#f8b755','#fcc468']]}
 };
 var ACCS = {none:'없음', scarf:'스카프', hat:'모자', ribbon:'리본'};
 
@@ -319,6 +322,9 @@ function Stage(canvas, opt){
   this.jump = 0; this.dizzy = 0; this.dizzyMeter = 0; this.asleep = false;
   this.hearts = []; this.zs = []; this.bubble = null; this.item = null; this.hint = null;
   this.touch = null; this._zT = 0;
+  // 얼굴 표정/입체감: yaw·pitch(고개 방향), lid(눈꺼풀 0=뜸~1=감음), mo(입 -1=다묾~1=벌림)
+  this.yaw = 0; this.pitch = 0; this.lid = 0; this.mo = 0;
+  this.bark = 0; this.chew = 0; this.squint = 0; this._blinkIn = 2; this._blink = -1;
   this.resize(); this.x = this.W/2; this.y = (this.top+this.H)/2;
   this._bindInput();
   var self = this;
@@ -347,13 +353,14 @@ Stage.prototype = {
   },
 
   /* ── 상호작용 ── */
-  say: function(text, sec){ this.bubble = {text:text, t:sec||1.2}; },
+  say: function(text, sec){ this.bubble = {text:text, t:sec||1.2};
+    if(text.indexOf('냠')>=0) this.chew = .9; else this.bark = .34; },   // 말할 때 입이 움직임
   hintText: function(text){ this.hint = {text:text, t:3.5}; },
   wake: function(){ if(this.asleep){ this.asleep = false; this.say('멍!'); this.onEvent('wake'); } },
   pet: function(){                                   // 쓰다듬기 → 하트
     if(this.asleep){ this.wake(); return; }
     for(var i=0;i<3;i++) this.hearts.push({x:this.x+(Math.random()-.5)*this.R, y:this.y-this.R*.6, v:this.U*(.25+Math.random()*.2), life:1, d:Math.random()*6});
-    this.sx = 1.1; this.sy = .92; this.onEvent('pet');
+    this.sx = 1.1; this.sy = .92; this.squint = .7; this.onEvent('pet');   // 쓰다듬으면 눈을 지그시
   },
   shake: function(){                                 // 흔들기 → 점프 + "멍!" , 계속 흔들면 어지러움
     if(this.asleep){ this.wake(); return; }
@@ -464,9 +471,33 @@ Stage.prototype = {
     if(this.y<this.top+Rt){ this.y=this.top+Rt; if(this.vy<0){ this._sq(-this.vy,'y'); this.vy*=-e; } }
     if(this.y>H-R){ this.y=H-R; if(this.vy>0){ this._sq(this.vy,'y'); this.vy*=-e; } }
 
-    // (6) 굴러가기: 빠르면 구르고, 멈추면 다시 똑바로
-    if(sp > U*.12) this.ang += this.vx/R*dt*.55;
-    else{ var near = Math.round(this.ang/(Math.PI*2))*Math.PI*2; this.ang += (near-this.ang)*Math.min(1, 7*dt); }
+    // (6) 입체감: 가는 방향(또는 손가락 쪽)을 바라보고 몸도 살짝 기울임. 가만히 있으면 두리번거림
+    var k = Math.min(1, 8*dt), ty = this.vx/(U*1.3), tp = this.vy/(U*1.3), idle = sp < U*.12;
+    if(this.touch){ ty += (this.touch.x-this.x)/(U*.6); tp += (this.touch.y-this.y)/(U*.6); }
+    else if(idle && !this.asleep){ ty += Math.sin(this.t*.7)*.45; tp += Math.sin(this.t*.53+1)*.25; }
+    if(this.asleep){ ty = 0; tp = .5; }
+    ty = Math.max(-1, Math.min(1, ty)); tp = Math.max(-1, Math.min(1, tp));
+    this.yaw += (ty-this.yaw)*k; this.pitch += (tp-this.pitch)*k;
+    var ta = Math.max(-1, Math.min(1, this.vx/(U*2)))*.32;
+    this.ang += (ta-this.ang)*k;
+
+    // (6-1) 눈 깜빡임: 2.5~5.5초마다 한 번(가끔 두 번). 잘 때는 감고, 쓰다듬으면 지그시
+    var lidT = 0;
+    if(this.asleep) lidT = 1;
+    else{
+      if(this._blink < 0 && (this._blinkIn -= dt) <= 0){ this._blink = 0; this._blinkIn = Math.random()<.25 ? .3 : 2.5+Math.random()*3; }
+      if(this._blink >= 0){ this._blink += dt/.18; lidT = Math.sin(Math.PI*Math.min(1,this._blink)); if(this._blink >= 1) this._blink = -1; }
+      if(this.squint > 0){ this.squint -= dt; lidT = Math.max(lidT, .6); }
+      if(this.dizzy > 0) lidT = Math.max(lidT, .45);
+    }
+    this.lid += (lidT-this.lid)*Math.min(1, (this._blink>=0 ? 40 : 10)*dt);
+
+    // (6-2) 입: 평소엔 헥헥, 짖을 때 크게 벌림, 먹을 때 오물오물, 잘 때 다묾
+    var moT = Math.sin(this.t*6)*.1;
+    if(this.asleep) moT = -.8+Math.sin(this.t*1.2)*.08;
+    if(this.bark > 0){ this.bark -= dt; moT = Math.sin(Math.PI*Math.max(0,1-this.bark/.34))*1.1-.1; }
+    if(this.chew > 0){ this.chew -= dt; moT = Math.sin(this.t*22)*.6-.2; }
+    this.mo += (moT-this.mo)*Math.min(1, 22*dt);
     this.sx += (1-this.sx)*Math.min(1, 9*dt); this.sy += (1-this.sy)*Math.min(1, 9*dt);
 
     if(this.jump>0) this.jump = Math.max(0, this.jump-dt);
@@ -510,10 +541,9 @@ Stage.prototype = {
 
     if(this.item) this._drawItem(this.item);
 
-    // 강아지: 숨쉬기(스케일) + 갸웃거림(멈춰 있을 때) + 점프 + 찌그러짐 + 굴림
-    var moving = Math.abs(this.vx)+Math.abs(this.vy) > this.U*.12;
+    // 강아지: 숨쉬기(스케일) + 갸웃거림 + 점프 + 찌그러짐 + 기울임, 그 위에 얼굴 변형(입체감·입·눈)
     var breathe = 1+Math.sin(t*(this.asleep?1.2:2.3))*(this.asleep?.035:.022);
-    var wobble = this.asleep ? .22 : (moving ? 0 : Math.sin(t*1.4)*.06);
+    var wobble = this.asleep ? .22 : 0;
     if(this.dizzy>0) wobble += Math.sin(t*11)*.16;
     var jp = this.jump>0 ? Math.sin(Math.PI*(1-this.jump/.45)) : 0;
     var sc = breathe*(1+jp*.22);
@@ -521,14 +551,12 @@ Stage.prototype = {
     g.translate(this.x, this.y-jp*R*.35);
     g.rotate(this.ang+wobble);
     g.scale(this.sx*sc, this.sy*sc);
-    var im = img(cfg.dog);
+    var im = img(cfg.dog), dog = DOGS[cfg.dog];
     if(im.complete && im.naturalWidth){
-      g.globalAlpha = this.asleep ? .5 : 1;
-      g.globalCompositeOperation = 'lighten';              // 사진의 검정 배경이 다른 그림을 덮지 않게
-      g.drawImage(im, -D/2, -D/2, D, D);
-      g.globalCompositeOperation = 'source-over';
-      this._drawAcc(D, DOGS[cfg.dog]);
-      g.globalAlpha = 1;
+      this._drawFace(im, dog, D);
+      this._drawLids(dog, D);
+      this._drawAcc(D, dog);
+      if(this.asleep){ g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(-D*.7,-D*.75,D*1.4,D*1.5); }   // 잘 때 어둡게
     }
     g.restore();
 
@@ -551,10 +579,65 @@ Stage.prototype = {
     if(this.showDebug) this._debug();
   },
 
-  // 악세서리(벡터). u,v 는 이미지 안 0~1 좌표 → 강아지 로컬 좌표로 변환
+  /* 얼굴 변형의 핵심: 이미지 안의 점 (u,v) 가 화면에서 어디로 가는지 계산
+     · 가운데(눈·코)는 고개 방향으로 많이, 가장자리는 조금 움직여 '고개를 돌리는' 입체감을 냄
+     · 입 아래쪽(턱)은 mo 값만큼 아래로 늘어나 입이 벌어짐                                  */
+  _map: function(dog, u, v){
+    var vv = v;
+    if(v > dog.mouth) vv += this.mo*.085*Math.pow((v-dog.mouth)/(1-dog.mouth), 1.2);
+    var bulge = Math.sin(Math.PI*Math.max(0,Math.min(1,u)))*Math.sin(Math.PI*Math.max(0,Math.min(1,v)));
+    return [u+this.yaw*.07*bulge, vv+this.pitch*.05*bulge];
+  },
+  // 이미지를 격자로 잘라 칸마다 변형된 위치에 그립니다(가벼운 메시 워프)
+  _drawFace: function(im, dog, D){
+    var g = this.g, iw = im.naturalWidth, ih = im.naturalHeight;
+    g.globalCompositeOperation = 'lighten';              // 사진의 검정 배경이 다른 그림을 덮지 않게
+    var still = Math.abs(this.yaw)<.03 && Math.abs(this.pitch)<.03 && Math.abs(this.mo)<.03;
+    if(still){ g.drawImage(im, -D/2, -D/2, D, D); }
+    else{
+      var NX = 6, NY = 10, i, j;
+      for(j=0;j<NY;j++){
+        var v0 = j/NY, v1 = (j+1)/NY, vm = (v0+v1)/2;
+        for(i=0;i<NX;i++){
+          var u0 = i/NX, u1 = (i+1)/NX, um = (u0+u1)/2;
+          var x0 = this._map(dog,u0,vm)[0], x1 = this._map(dog,u1,vm)[0];
+          var y0 = this._map(dog,um,v0)[1], y1 = this._map(dog,um,v1)[1];
+          g.drawImage(im, u0*iw, v0*ih, (u1-u0)*iw, (v1-v0)*ih,
+                      -D/2+x0*D, -D/2+y0*D, (x1-x0)*D+.6, (y1-y0)*D+.6);   // +0.6px: 칸 사이 틈 방지
+        }
+      }
+    }
+    g.globalCompositeOperation = 'source-over';
+  },
+  // 눈꺼풀: 눈 모양(타원) 안에서 위에서부터 lid 만큼 털 색으로 덮고, 끝에 속눈썹 선을 그림
+  _drawLids: function(dog, D){
+    var g = this.g, lid = this.lid;
+    if(lid < .03) return;
+    for(var i=0;i<dog.eyes.length;i++){
+      var e = dog.eyes[i], c = this._map(dog, e[0], e[1]);
+      var x = -D/2+c[0]*D, y = -D/2+c[1]*D, rx = e[2]*D*1.16, ry = e[3]*D*1.16;
+      var edge = Math.min(y+ry*.3, y-ry+lid*ry*1.9);     // 눈꺼풀 아래쪽 끝(다 감으면 눈 아래쪽에서 멈춤)
+      g.save();
+      g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI*2); g.clip();
+      var gr = g.createLinearGradient(0, y-ry, 0, y+ry); gr.addColorStop(0, e[4]); gr.addColorStop(1, e[5]);
+      g.fillStyle = gr;
+      if(lid > .9) g.fillRect(x-rx-1, y-ry-1, rx*2+2, ry*2+2);              // 완전히 감음: 눈 전체를 덮음
+      else{ g.beginPath(); g.moveTo(x-rx-1, y-ry-1); g.lineTo(x+rx+1, y-ry-1); g.lineTo(x+rx+1, edge-ry*.3);
+            g.quadraticCurveTo(x, edge+ry*.35, x-rx-1, edge-ry*.3); g.closePath(); g.fill(); }
+      // 감긴 눈 선(속눈썹): 아래로 볼록한 곡선 — 웃으며 감은 눈처럼 보임
+      g.strokeStyle = '#33200f'; g.lineWidth = Math.max(1.2, D*.02); g.lineCap = 'round';
+      g.beginPath(); g.moveTo(x-rx*.8, edge-ry*.3); g.quadraticCurveTo(x, edge+ry*.4, x+rx*.8, edge-ry*.3); g.stroke();
+      g.restore();
+    }
+  },
+
+  // 악세서리(벡터). u,v 는 이미지 안 0~1 좌표 → 강아지 로컬 좌표로 변환 (얼굴 변형을 따라 움직임)
   _drawAcc: function(D, dog){
-    var g = this.g, acc = cfg.acc;
-    function X(u){ return -D/2+u*D; } function Y(v){ return -D/2+v*D; }
+    var g = this.g, acc = cfg.acc, self = this;
+    if(acc==='none') return;
+    var an = acc==='hat' ? [.5, dog.top+.05] : acc==='scarf' ? [.5, dog.chin-.05] : [.665, dog.top+.085];
+    var mp = this._map(dog, an[0], an[1]), ox = (mp[0]-an[0])*D, oy = (mp[1]-an[1])*D;
+    function X(u){ return -D/2+u*D+ox; } function Y(v){ return -D/2+v*D+oy; }
     if(acc==='hat'){                                   // 고깔모자
       var by = dog.top+.055, ty = by-.25;
       g.fillStyle = '#e8503a'; g.beginPath(); g.moveTo(X(.5),Y(ty)); g.lineTo(X(.385),Y(by)); g.lineTo(X(.615),Y(by)); g.closePath(); g.fill();

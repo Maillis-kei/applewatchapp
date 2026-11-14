@@ -223,9 +223,10 @@ if(qs.has('act'))   cfg.act   = qs.get('act');
 
 // 모드: URL 파라미터가 최우선, 없으면 화면 너비 260px 이하를 워치로 판단
 var modeParam = qs.get('mode');
+var VIEW_W = window.innerWidth || document.documentElement.clientWidth || 0;
 var MODE = modeParam==='watch' ? 'watch'
          : modeParam==='phone' ? 'phone'
-         : (Math.min(window.innerWidth, screen.width||9999) <= 260 ? 'watch' : 'phone');
+         : (VIEW_W > 0 && VIEW_W <= 260 ? 'watch' : 'phone');   // 너비 0(숨겨진 탭 등)은 판단 불가 → 폰
 
 // 이미지 미리 로드 (배경이 검정인 JPG — 캔버스에 'lighten' 합성으로 그려 검정을 투명처럼 처리)
 var IMG = {};
@@ -662,7 +663,7 @@ function initWatch(){
   document.title = cfg.name;
   document.getElementById('startImg').src = 'assets/'+cfg.dog+'.jpg';
   // 넓은 화면에서 테스트 중일 때만 폰 모드로 돌아가는 버튼 표시
-  if(window.innerWidth > 260){ var b = document.getElementById('toPhone'); b.hidden = false;
+  if(VIEW_W === 0 || VIEW_W > 260){ var b = document.getElementById('toPhone'); b.hidden = false;
     b.onclick = function(){ go('phone'); }; }
   // 스크롤/바운스/디지털 크라운 스크롤 차단
   document.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive:false});

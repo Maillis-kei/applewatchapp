@@ -27,7 +27,12 @@
   #watchCanvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:none}
   #start{position:absolute;top:0;left:0;right:0;bottom:0;background:#000;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
-  #startImg{width:46vmin;height:46vmin;max-width:220px;max-height:220px;display:block}
+  #startImg{width:50vmin;height:50vmin;max-width:220px;max-height:220px;display:block}
+  /* 워치에서 바로 견종·악세서리를 바꾸는 선택 화면 */
+  .pick,.pickrow{display:flex;align-items:center;justify-content:center;gap:6px}
+  .pick button{border:0;background:#1c1c1f;color:#fff;border-radius:999px;width:44px;height:44px;font-size:24px;line-height:1;padding:0 0 3px}
+  #accBtn{border:1px solid #3a3a40;background:#000;color:#ddd;border-radius:999px;font-size:14px;font-weight:600;
+    min-width:84px;min-height:44px;padding:6px 12px}
   #startBtn{border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);
     font-weight:800;font-size:17px;min-width:96px;min-height:44px;padding:8px 22px}
   #toPhone{position:absolute;top:10px;left:10px;border:1px solid #333;background:#000;color:#aaa;
@@ -92,9 +97,17 @@
 <div id="watch" hidden>
   <canvas id="watchCanvas"></canvas>
   <div id="start">
-    <img id="startImg" alt="">
+    <!-- 견종 고르기: ‹ › 로 넘기거나 얼굴을 탭 -->
+    <div class="pick">
+      <button id="prevDog" aria-label="이전 강아지">‹</button>
+      <img id="startImg" alt="">
+      <button id="nextDog" aria-label="다음 강아지">›</button>
+    </div>
     <!-- 첫 터치에서 센서 권한을 요청해야 하므로(iOS/watchOS 정책) 반드시 버튼으로 시작 -->
-    <button id="startBtn">시작</button>
+    <div class="pickrow">
+      <button id="accBtn"></button>
+      <button id="startBtn">시작</button>
+    </div>
     <button id="toPhone" hidden>폰 모드</button>
   </div>
 </div>
@@ -181,6 +194,7 @@
         <li>아이폰 <b>단축어</b> 앱 → 새 단축어 → 동작 추가에서 <code>URL의 웹 페이지 보기</code>를 고르고 링크를 붙여넣습니다. (<code>URL 열기</code>는 워치에서 오류가 납니다)</li>
         <li>단축어 설정(ⓘ)에서 <b>Apple Watch에 표시</b>를 켭니다.</li>
         <li>워치의 단축어 앱에서 실행 → <b>시작</b>을 누릅니다.</li>
+        <li>워치에서 견종·악세서리를 바꾸려면 시작 화면의 ‹ › 와 악세서리 버튼을 누르세요. 놀다가 <b>강아지를 길게 누르면</b> 이 화면으로 돌아옵니다. 링크를 다시 만들 필요가 없습니다.</li>
         <li>단축어로 안 열리면 <b>메시지로 나에게 보내기</b> 후 워치 메시지 앱에서 링크를 탭하세요.</li>
       </ol>
     </details>
@@ -333,6 +347,7 @@ var Sensor = {
 function Stage(canvas, opt){
   this.c = canvas; this.g = canvas.getContext('2d');
   this.onEvent = opt.onEvent || function(){};
+  this.onMenu = opt.onMenu || null;         // 강아지를 길게 눌렀을 때(워치: 강아지 바꾸기 화면)
   this.showDebug = !!opt.debug;
   this.top = opt.top || 0;                  // 위쪽 금지 구역(주소창) 높이
   this.t = 0; this.running = false;
@@ -428,6 +443,9 @@ Stage.prototype = {
       if(!down.dog) lp = setTimeout(function(){          // 빈 곳 길게 누르기 → 간식
         if(down && !down.moved){ self.act('treat', down.x, down.y); down.used = true; self.touch = null; }
       }, 600);
+      else if(self.onMenu) lp = setTimeout(function(){   // 강아지 길게 누르기 → 강아지 바꾸기 화면
+        if(down && !down.moved){ down.used = true; self.touch = null; self.onMenu(); }
+      }, 700);
     }
     function move(e){
       if(!down) return; e.preventDefault();
@@ -798,15 +816,33 @@ function initWatch(){
   document.body.className = 'watch';
   var root = document.getElementById('watch'); root.hidden = false;
   document.title = cfg.name;
-  preload(cfg.dog);
-  document.getElementById('startImg').src = 'assets/'+cfg.dog+'.jpg';
+  // ── 워치에서 직접 고르기: 링크(단축어 URL)를 다시 만들지 않아도 견종·악세서리를 바꿀 수 있음 ──
+  // 마지막 선택을 저장해 두었다가 다음에 열 때 적용합니다. 단, 링크의 견종/악세서리가 바뀌었으면
+  // (아이폰에서 새 링크를 만든 경우) 링크 쪽을 따릅니다. 워치가 저장을 지우면 링크 값으로 돌아갑니다.
+  var $w = function(id){ return document.getElementById(id); };
+  var urlPick = cfg.dog+'/'+cfg.acc, dogKeys = Object.keys(DOGS), accKeys = Object.keys(ACCS);
+  var mem = store.get('mw.pick');
+  if(mem && mem.from === urlPick && DOGS[mem.dog] && ACCS[mem.acc]){ cfg.dog = mem.dog; cfg.acc = mem.acc; }
+  function showPick(){
+    preload(cfg.dog);
+    $w('startImg').src = 'assets/'+cfg.dog+'.jpg';
+    $w('accBtn').textContent = cfg.acc==='none' ? '악세서리' : ACCS[cfg.acc];
+    store.set('mw.pick', {from:urlPick, dog:cfg.dog, acc:cfg.acc});
+  }
+  function stepDog(d){ cfg.dog = dogKeys[(dogKeys.indexOf(cfg.dog)+d+dogKeys.length)%dogKeys.length]; showPick(); }
+  $w('prevDog').onclick = function(){ stepDog(-1); };
+  $w('nextDog').onclick = function(){ stepDog(1); };
+  $w('startImg').onclick = function(){ stepDog(1); };
+  $w('accBtn').onclick = function(){ cfg.acc = accKeys[(accKeys.indexOf(cfg.acc)+1)%accKeys.length]; showPick(); };
+  showPick();
   // 넓은 화면에서 테스트 중일 때만 폰 모드로 돌아가는 버튼 표시
   if(!SMALL){ var b = document.getElementById('toPhone'); b.hidden = false;
     b.onclick = function(){ go('phone'); }; }
   // 스크롤/바운스/디지털 크라운 스크롤 차단
   document.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive:false});
 
-  var stage = new Stage(document.getElementById('watchCanvas'), {debug:cfg.debug, top:cfg.top, onEvent:count});
+  var stage = new Stage(document.getElementById('watchCanvas'), {debug:cfg.debug, top:cfg.top, onEvent:count,
+    onMenu:function(){ $w('start').hidden = false; }});     // 놀다가 강아지를 길게 누르면 다시 선택 화면
   Sensor.onShake = function(){ stage.shake(); };
   Sync.listen(function(act){ stage.act(act); });
 
@@ -833,6 +869,7 @@ function initWatch(){
     });
   });
 
+  var started = false;
   document.getElementById('startBtn').onclick = function(){
     keepAwake();
     if(SMALL || qs.get('fs')==='1') goFull();   // 워치에서만 시도 (큰 화면에서는 ?fs=1 로 시험)
@@ -840,8 +877,12 @@ function initWatch(){
     document.getElementById('start').hidden = true;
     stage.resize(); stage.x = stage.W/2; stage.y = (stage.top+stage.H)/2;
     stage.start(); stage.say(cfg.name+'!', 1.4);
-    p.then(function(st){ stage.hintText(st==='on' ? '손목을 기울여 보세요' : '드래그로 놀아요'); });
-    if(cfg.act) setTimeout(function(){ stage.act(cfg.act); }, 1600);
+    if(!started){                                // 안내는 처음 한 번만
+      started = true;
+      p.then(function(st){ stage.hintText(st==='on' ? '손목을 기울여 보세요' : '드래그로 놀아요'); });
+      setTimeout(function(){ stage.hintText('길게 누르면 강아지 바꾸기'); }, 6000);
+    }
+    if(cfg.act && !this._acted){ this._acted = true; setTimeout(function(){ stage.act(cfg.act); }, 1600); }
   };
 }
 

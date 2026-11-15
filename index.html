@@ -202,7 +202,8 @@ var DOGS = {
   // eyes: [가로중심, 세로중심, 가로반지름, 세로반지름, 눈꺼풀 위쪽 색, 아래쪽 색] (좌표는 이미지 안 0~1)
   //       색은 각 눈 주변 털에서 뽑은 값이라 조명(그늘)까지 자연스럽게 맞습니다.
   // mouth: 이 세로 위치 아래쪽(턱)을 늘이고 줄여 입을 움직입니다.
-  shiba:  {label:'시바',     top:.175, chin:.972, mouth:.66, eyes:[[.368,.438,.058,.054,'#d28a4f','#e4a671'],[.660,.458,.058,.054,'#f9c791','#fdd7b3']]},
+  // frames:true → 표정 사진 4장(눈 뜸/감음 × 입 벌림/다묾)을 갈아 끼움. 없으면 눈꺼풀·턱 변형으로 대신 표현
+  shiba:  {label:'시바',     frames:true, top:.175, chin:.972, mouth:.66, eyes:[[.368,.438,.058,.054,'#d28a4f','#e4a671'],[.660,.458,.058,.054,'#f9c791','#fdd7b3']]},
   bichon: {label:'비숑',     top:.033, chin:.954, mouth:.67, eyes:[[.375,.515,.056,.054,'#cbc1bb','#f1ecea'],[.634,.487,.056,.054,'#d6cac1','#ede7e3']]},
   poodle: {label:'푸들',     top:.054, chin:.877, mouth:.67, eyes:[[.375,.486,.054,.052,'#bf703a','#fba975'],[.648,.467,.054,.052,'#b05d1f','#e58741']]},
   corgi:  {label:'코기',     top:.251, chin:.984, mouth:.71, eyes:[[.390,.516,.068,.068,'#c5936a','#e7d6cf'],[.644,.516,.068,.068,'#e5b17e','#fcf2e9']]},
@@ -243,10 +244,13 @@ var MODE = modeParam==='watch' ? 'watch'
 
 // 이미지 미리 로드 (배경이 검정인 JPG — 캔버스에 'lighten' 합성으로 그려 검정을 투명처럼 처리)
 var IMG = {};
-function img(dog){
-  if(!IMG[dog]){ IMG[dog] = new Image(); IMG[dog].src = 'assets/'+dog+'.jpg'; }
-  return IMG[dog];
+// key: 'oo'=눈 뜸·입 벌림(기본 사진), 'oc'=눈 뜸·입 다묾, 'co'=눈 감음·입 벌림, 'cc'=눈 감음·입 다묾
+function img(dog, key){
+  var name = dog+(key && key!=='oo' ? '_'+key : '');
+  if(!IMG[name]){ IMG[name] = new Image(); IMG[name].src = 'assets/'+name+'.jpg'; }
+  return IMG[name];
 }
+function preload(dog){ img(dog); if(DOGS[dog].frames) ['oc','co','cc'].forEach(function(k){ img(dog,k); }); }
 
 /* ───────── 2) 센서 매니저 ─────────
    devicemotion(가속도+중력) → 화면 좌표계 중력 벡터(gx, gy)로 변환합니다.
@@ -331,6 +335,7 @@ function Stage(canvas, opt){
   // 얼굴 표정/입체감: yaw·pitch(고개 방향), lid(눈꺼풀 0=뜸~1=감음), mo(입 -1=다묾~1=벌림)
   this.yaw = 0; this.pitch = 0; this.lid = 0; this.mo = 0;
   this.bark = 0; this.chew = 0; this.squint = 0; this._blinkIn = 2; this._blink = -1;
+  this.moW = 0; this._shut = 0; this._shutIn = 7;      // moW: 실제 턱 변형량, _shut: 잠깐 입 다물고 있는 시간
   this.resize(); this.x = this.W/2; this.y = (this.top+this.H)/2;
   this._bindInput();
   var self = this;
@@ -506,9 +511,12 @@ Stage.prototype = {
 
     // (6-2) 입: 평소엔 헥헥, 짖을 때 크게 벌림, 먹을 때 오물오물, 잘 때 다묾
     var moT = Math.sin(this.t*6)*.1;
+    if(this._shut > 0){ this._shut -= dt; moT = -.7; }                      // 가끔 2~4초 입을 다물고 있음
+    else if((this._shutIn -= dt) <= 0){ this._shut = 2+Math.random()*2; this._shutIn = 7+Math.random()*7; }
     if(this.asleep) moT = -.8+Math.sin(this.t*1.2)*.08;
-    if(this.bark > 0){ this.bark -= dt; moT = Math.sin(Math.PI*Math.max(0,1-this.bark/.34))*1.1-.1; }
-    if(this.chew > 0){ this.chew -= dt; moT = Math.sin(this.t*22)*.6-.2; }
+    if(this.bark > 0){ this.bark -= dt; var bp = Math.max(0, 1-this.bark/.34);
+      moT = bp < .25 ? -1 : Math.sin(Math.PI*(bp-.25)/.75)*1.1; }           // 다물었다가 크게 벌림
+    if(this.chew > 0){ this.chew -= dt; moT = Math.sin(this.t*22)*.8-.1; }   // 오물오물
     this.mo += (moT-this.mo)*Math.min(1, 22*dt);
     this.sx += (1-this.sx)*Math.min(1, 9*dt); this.sy += (1-this.sy)*Math.min(1, 9*dt);
 
@@ -563,10 +571,17 @@ Stage.prototype = {
     g.translate(this.x, this.y-jp*R*.35);
     g.rotate(this.ang+wobble);
     g.scale(this.sx*sc, this.sy*sc);
-    var im = img(cfg.dog), dog = DOGS[cfg.dog];
+    var dog = DOGS[cfg.dog], im = img(cfg.dog), mouthOpen = this.mo > -.3;
+    this.moW = this.mo;
+    if(dog.frames){
+      // 표정 사진이 있는 견종: 눈·입 상태에 맞는 사진을 골라 그림(아직 로딩 중이면 기본 사진)
+      var fr = img(cfg.dog, (this.lid > .5 ? 'c' : 'o')+(mouthOpen ? 'o' : 'c'));
+      if(fr.complete && fr.naturalWidth) im = fr;
+      this.moW = mouthOpen ? Math.max(0, this.mo) : 0;       // 턱 변형은 벌릴 때만 살짝 더함
+    }
     if(im.complete && im.naturalWidth){
       this._drawFace(im, dog, D);
-      this._drawLids(dog, D);
+      if(!dog.frames) this._drawLids(dog, D);
       this._drawAcc(D, dog);
       if(this.asleep){ g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(-D*.7,-D*.75,D*1.4,D*1.5); }   // 잘 때 어둡게
     }
@@ -596,7 +611,7 @@ Stage.prototype = {
      · 입 아래쪽(턱)은 mo 값만큼 아래로 늘어나 입이 벌어짐                                  */
   _map: function(dog, u, v){
     var vv = v;
-    if(v > dog.mouth) vv += this.mo*.085*Math.pow((v-dog.mouth)/(1-dog.mouth), 1.2);
+    if(v > dog.mouth) vv += this.moW*.085*Math.pow((v-dog.mouth)/(1-dog.mouth), 1.2);
     var bulge = Math.sin(Math.PI*Math.max(0,Math.min(1,u)))*Math.sin(Math.PI*Math.max(0,Math.min(1,v)));
     return [u+this.yaw*.07*bulge, vv+this.pitch*.05*bulge];
   },
@@ -604,7 +619,7 @@ Stage.prototype = {
   _drawFace: function(im, dog, D){
     var g = this.g, iw = im.naturalWidth, ih = im.naturalHeight;
     g.globalCompositeOperation = 'lighten';              // 사진의 검정 배경이 다른 그림을 덮지 않게
-    var still = Math.abs(this.yaw)<.03 && Math.abs(this.pitch)<.03 && Math.abs(this.mo)<.03;
+    var still = Math.abs(this.yaw)<.03 && Math.abs(this.pitch)<.03 && Math.abs(this.moW)<.03;
     if(still){ g.drawImage(im, -D/2, -D/2, D, D); }
     else{
       var NX = 6, NY = 10, i, j;
@@ -764,6 +779,7 @@ function initWatch(){
   document.body.className = 'watch';
   var root = document.getElementById('watch'); root.hidden = false;
   document.title = cfg.name;
+  preload(cfg.dog);
   document.getElementById('startImg').src = 'assets/'+cfg.dog+'.jpg';
   // 넓은 화면에서 테스트 중일 때만 폰 모드로 돌아가는 버튼 표시
   if(!SMALL){ var b = document.getElementById('toPhone'); b.hidden = false;
@@ -800,14 +816,14 @@ function initPhone(){
     count(type);
     if(type==='sleep' || type==='wake') $('sleepBtn').innerHTML = stage.asleep ? '<b>🌞</b>깨우기' : '<b>😴</b>재우기';
   }});
-  stage.start();
+  stage.start(); preload(cfg.dog);
   Sensor.onShake = function(){ stage.shake(); };
 
   // 견종 / 악세서리 버튼 생성
   Object.keys(DOGS).forEach(function(k){
     var b = document.createElement('button'); b.dataset.dog = k;
     b.innerHTML = '<img src="assets/'+k+'.jpg" alt="">'+DOGS[k].label;
-    b.onclick = function(){ cfg.dog = k; render(); stage.say('멍!'); };
+    b.onclick = function(){ cfg.dog = k; preload(k); render(); stage.say('멍!'); };
     $('dogs').appendChild(b);
   });
   Object.keys(ACCS).forEach(function(k){

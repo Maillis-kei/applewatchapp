@@ -122,6 +122,8 @@
     <div class="dogs" id="dogs"></div>
     <label class="f">악세서리</label>
     <div class="seg" id="accs"></div>
+    <label class="f" for="size">강아지 크기 <b id="sizeVal"></b></label>
+    <input type="range" id="size" min="0.8" max="2" step="0.1">
     <label class="f" for="sens">민감도 (중력 반응 속도) <b id="sensVal"></b></label>
     <input type="range" id="sens" min="0.5" max="3" step="0.1">
   </div>
@@ -219,12 +221,13 @@ var store = {            // localStorage 는 워치에서 지워질 수 있으�
 };
 
 // 우선순위: 기본값 < 저장된 값(아이폰) < URL 파라미터(워치는 이것만으로 100% 동작)
-var cfg = {name:'초코', dog:'shiba', acc:'none', sens:1.5, flip:false, debug:false, act:'', top:0};
+var cfg = {name:'초코', dog:'shiba', acc:'none', sens:1.5, flip:false, debug:false, act:'', top:0, size:2};
 var saved = store.get('mw.cfg'); if(saved) for(var k in cfg) if(saved[k]!=null) cfg[k]=saved[k];
 if(qs.get('name'))  cfg.name = qs.get('name').slice(0,8);
 if(DOGS[qs.get('dog')]) cfg.dog = qs.get('dog');
 if(ACCS[qs.get('acc')]) cfg.acc = qs.get('acc');
 if(qs.get('sens'))  cfg.sens = Math.min(3, Math.max(.5, parseFloat(qs.get('sens'))||1.5));
+if(qs.get('size'))  cfg.size = Math.min(2, Math.max(.8, parseFloat(qs.get('size'))||2));   // 강아지 크기 배율(1=처음 크기)
 if(qs.has('flip'))  cfg.flip  = qs.get('flip')==='1';
 if(qs.has('debug')) cfg.debug = qs.get('debug')==='1';
 if(qs.has('act'))   cfg.act   = qs.get('act');
@@ -353,7 +356,7 @@ Stage.prototype = {
     this.W = Math.max(40, r.width); this.H = Math.max(40, r.height); this.dpr = d;
     this.c.width = Math.round(this.W*d); this.c.height = Math.round(this.H*d);
     this.U = Math.min(this.W, this.H);        // 화면 크기 단위(워치/폰에서 같은 체감 속도)
-    this.D = this.U*.5;                       // 강아지 그림 크기
+    this.D = this.U*Math.min(1, .5*cfg.size);  // 강아지 그림 크기 (크기 배율 2 = 화면 짧은 쪽을 꽉 채움)
     this.R = this.D*.4;                       // 충돌 반지름
     if(this.x!=null){ this.x = Math.min(this.W-this.R, Math.max(this.R, this.x));
                       this.y = Math.min(this.H-this.R, Math.max(this.top+this.R, this.y)); }
@@ -637,7 +640,7 @@ Stage.prototype = {
     var still = Math.abs(this.yaw)<.03 && Math.abs(this.pitch)<.03 && Math.abs(this.moW)<.03;
     if(still){ g.drawImage(im, -D/2, -D/2, D, D); }
     else{
-      var NX = 6, NY = 10, i, j;
+      var NX = 6, NY = 16, i, j;     // 세로로 잘게 나눌수록 큰 얼굴에서도 계단 현상이 줄어듦
       for(j=0;j<NY;j++){
         var v0 = j/NY, v1 = (j+1)/NY, vm = (v0+v1)/2;
         for(i=0;i<NX;i++){
@@ -872,7 +875,7 @@ function initPhone(){
   var isFile = location.protocol==='file:';
   $('base').value = store.get('mw.base') || (isFile ? '' : location.origin+location.pathname);
   function watchUrl(){
-    var p = new URLSearchParams({mode:'watch', name:cfg.name, dog:cfg.dog, sens:String(cfg.sens)});
+    var p = new URLSearchParams({mode:'watch', name:cfg.name, dog:cfg.dog, sens:String(cfg.sens), size:String(cfg.size)});
     if(cfg.acc!=='none') p.set('acc', cfg.acc);
     if(cfg.act) p.set('act', cfg.act);
     if(cfg.flip) p.set('flip','1');
@@ -888,6 +891,7 @@ function initPhone(){
     document.title = (cfg.name||'멍워치')+' 컨트롤 타워';
     $('sensVal').textContent = '×'+Number(cfg.sens).toFixed(1);
     $('topVal').textContent = cfg.top+'px';
+    $('sizeVal').textContent = '×'+Number(cfg.size).toFixed(1);
     [].forEach.call($('dogs').children, function(b){ b.setAttribute('aria-pressed', b.dataset.dog===cfg.dog); });
     [].forEach.call($('accs').children, function(b){ b.setAttribute('aria-pressed', b.dataset.acc===cfg.acc); });
     var u = watchUrl();
@@ -897,10 +901,11 @@ function initPhone(){
     store.set('mw.cfg', cfg);
   }
 
-  $('name').value = cfg.name; $('sens').value = cfg.sens; $('act').value = cfg.act;
+  $('name').value = cfg.name; $('sens').value = cfg.sens; $('size').value = cfg.size; $('act').value = cfg.act;
   $('flip').checked = cfg.flip; $('debug').checked = cfg.debug; $('top').value = cfg.top;
   $('name').oninput  = function(){ cfg.name = this.value.trim().slice(0,8) || '강아지'; render(); };
   $('sens').oninput  = function(){ cfg.sens = parseFloat(this.value); render(); };
+  $('size').oninput  = function(){ cfg.size = parseFloat(this.value); stage.resize(); render(); };
   $('act').onchange  = function(){ cfg.act = this.value; render(); };
   $('top').oninput   = function(){ cfg.top = parseInt(this.value,10); render(); };
   $('flip').onchange = function(){ cfg.flip = this.checked; render(); };

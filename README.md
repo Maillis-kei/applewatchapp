@@ -58,6 +58,7 @@ assets/*.jpg    강아지 6종 (시바·비숑·푸들·코기·허스키·리�
 | `dog` | `shiba` `bichon` `poodle` `corgi` `husky` `golden` |
 | `acc` | `scarf` `hat` `ribbon` |
 | `sens` | 0.5 ~ 3 |
+| `size` | 강아지 크기 배율 0.8 ~ 2 (기본 2) |
 | `act` | 열릴 때 할 행동: `treat` `ball` `sleep` |
 | `top` | 위쪽 여백(px). 워치 주소창에 가려지지 않게 비워 두는 높이, 기본 0 |
 | `flip=1` | 기울임 방향 반전 |

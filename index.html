@@ -23,8 +23,6 @@
   /* ───────── 워치 모드: 스크롤 원천 차단 + 순수 검정(OLED 절전) ───────── */
   body.watch{position:fixed;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;
     overflow:hidden;background:#000;touch-action:none;-webkit-user-select:none;user-select:none}
-  /* 실험 옵션(bar=1): 페이지를 조금 길게 만들어 스크롤되게 하면 브라우저가 주소창을 접을 수 있음. 캔버스는 고정 */
-  body.watch.scrolly{position:static;height:calc(100vh + 160px);overflow-y:auto;touch-action:auto}
   #watch{position:fixed;top:0;left:0;right:0;bottom:0;background:#000;overflow:hidden}
   #watchCanvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:none}
   #start{position:absolute;top:0;left:0;right:0;bottom:0;background:#000;
@@ -153,7 +151,6 @@
     <div class="row">
       <label class="chk"><input type="checkbox" id="flip">기울임 방향 반대로</label>
       <label class="chk"><input type="checkbox" id="debug">센서 진단 표시</label>
-      <label class="chk"><input type="checkbox" id="bar">주소창 밀어내기 (실험)</label>
     </div>
     <div class="url" id="url"></div>
     <button class="btn" id="copy">워치용 링크 복사</button>
@@ -221,7 +218,7 @@ var store = {            // localStorage 는 워치에서 지워질 수 있으�
 };
 
 // 우선순위: 기본값 < 저장된 값(아이폰) < URL 파라미터(워치는 이것만으로 100% 동작)
-var cfg = {name:'초코', dog:'shiba', acc:'none', sens:1.5, flip:false, debug:false, act:'', top:0, bar:false};
+var cfg = {name:'초코', dog:'shiba', acc:'none', sens:1.5, flip:false, debug:false, act:'', top:0};
 var saved = store.get('mw.cfg'); if(saved) for(var k in cfg) if(saved[k]!=null) cfg[k]=saved[k];
 if(qs.get('name'))  cfg.name = qs.get('name').slice(0,8);
 if(DOGS[qs.get('dog')]) cfg.dog = qs.get('dog');
@@ -231,7 +228,6 @@ if(qs.has('flip'))  cfg.flip  = qs.get('flip')==='1';
 if(qs.has('debug')) cfg.debug = qs.get('debug')==='1';
 if(qs.has('act'))   cfg.act   = qs.get('act');
 // top: 워치 브라우저의 닫기 버튼·주소창이 화면 위를 덮으므로 그만큼 위쪽을 비워 둡니다(px)
-if(qs.has('bar'))   cfg.bar   = qs.get('bar')==='1';
 if(qs.has('top'))   cfg.top   = Math.min(120, Math.max(0, parseInt(qs.get('top'),10)||0));
 
 // 모드: URL 파라미터가 최우선, 없으면 화면 너비 260px 이하를 워치로 판단
@@ -353,13 +349,15 @@ Stage.prototype = {
   },
   start: function(){
     if(this.running) return; this.running = true;
-    var self = this, last = performance.now();
-    (function loop(now){
-      if(!self.running) return;
-      var dt = Math.min(.05, (now-last)/1000); last = now;
+    var self = this, last = performance.now(), lastFrame = last;
+    function tick(now){
+      var dt = Math.min(.05, (now-last)/1000); last = now; lastFrame = now;
       self.update(dt); self.draw();
-      requestAnimationFrame(loop);
-    })(last);
+    }
+    (function loop(now){ if(!self.running) return; tick(now); requestAnimationFrame(loop); })(last);
+    // 워치는 절전을 위해 화면 갱신(requestAnimationFrame)을 멈출 때가 있습니다.
+    // 0.25초 넘게 갱신이 없으면 타이머가 대신 그려서 강아지가 굳지 않게 합니다(초당 10장).
+    setInterval(function(){ var now = performance.now(); if(self.running && now-lastFrame > 250) tick(now); }, 100);
   },
 
   /* ── 상호작용 ── */
@@ -720,7 +718,7 @@ Stage.prototype = {
                  '화면 '+Math.round(this.W)+'x'+Math.round(this.H)+' @'+this.dpr];
     g.font = '600 '+fs+'px ui-monospace,Menlo,monospace'; g.textAlign = 'left'; g.textBaseline = 'top';
     g.fillStyle = s.status==='on' ? '#5fd38a' : '#ffb86b';
-    lines.push('위 여백 '+this.top);
+    lines.push('위 여백 '+this.top+' 깨움 '+(navigator.wakeLock?'O':'X'));
     for(var i=0;i<lines.length;i++) g.fillText(lines[i], 6, this.top+6+i*fs*1.3);
     if(this.top){ g.fillRect(0, this.top-1, this.W, 1); }          // 여백 경계선
   }
@@ -771,24 +769,24 @@ function initWatch(){
   if(!SMALL){ var b = document.getElementById('toPhone'); b.hidden = false;
     b.onclick = function(){ go('phone'); }; }
   // 스크롤/바운스/디지털 크라운 스크롤 차단
-  if(cfg.bar) document.body.className = 'watch scrolly';
-  else document.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive:false});
+  document.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive:false});
 
   var stage = new Stage(document.getElementById('watchCanvas'), {debug:cfg.debug, top:cfg.top, onEvent:count});
   Sensor.onShake = function(){ stage.shake(); };
   Sync.listen(function(act){ stage.act(act); });
 
+  // 화면 꺼짐 방지(Wake Lock): 지원하는 기기에서만 동작. 화면으로 돌아올 때마다 다시 요청해야 합니다.
+  function keepAwake(){ try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').catch(function(){}); }catch(e){} }
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) keepAwake(); });
+
   document.getElementById('startBtn').onclick = function(){
+    keepAwake();
     var p = Sensor.start();                     // ← 반드시 터치 핸들러 안에서 호출(권한 정책)
     document.getElementById('start').hidden = true;
     stage.resize(); stage.x = stage.W/2; stage.y = (stage.top+stage.H)/2;
     stage.start(); stage.say(cfg.name+'!', 1.4);
     p.then(function(st){ stage.hintText(st==='on' ? '손목을 기울여 보세요' : '드래그로 놀아요'); });
     if(cfg.act) setTimeout(function(){ stage.act(cfg.act); }, 1600);
-    if(cfg.bar){                                 // 주소창 밀어내기: 살짝 스크롤 → 화면 크기가 바뀌면 다시 맞춤
-      setTimeout(function(){ window.scrollTo(0, 160); }, 80);
-      if(window.visualViewport) window.visualViewport.addEventListener('resize', function(){ stage.resize(); });
-    }
   };
 }
 
@@ -827,7 +825,6 @@ function initPhone(){
     if(cfg.act) p.set('act', cfg.act);
     if(cfg.flip) p.set('flip','1');
     if(cfg.debug) p.set('debug','1');
-    if(cfg.bar) p.set('bar','1');
     if(cfg.top) p.set('top', String(cfg.top));
     var base = ($('base').value.trim() || 'https://<아이디>.github.io/<저장소>/').split('?')[0];
     return base+'?'+p.toString();
@@ -849,14 +846,13 @@ function initPhone(){
   }
 
   $('name').value = cfg.name; $('sens').value = cfg.sens; $('act').value = cfg.act;
-  $('flip').checked = cfg.flip; $('debug').checked = cfg.debug; $('top').value = cfg.top; $('bar').checked = cfg.bar;
+  $('flip').checked = cfg.flip; $('debug').checked = cfg.debug; $('top').value = cfg.top;
   $('name').oninput  = function(){ cfg.name = this.value.trim().slice(0,8) || '강아지'; render(); };
   $('sens').oninput  = function(){ cfg.sens = parseFloat(this.value); render(); };
   $('act').onchange  = function(){ cfg.act = this.value; render(); };
   $('top').oninput   = function(){ cfg.top = parseInt(this.value,10); render(); };
   $('flip').onchange = function(){ cfg.flip = this.checked; render(); };
   $('debug').onchange= function(){ cfg.debug = this.checked; render(); };
-  $('bar').onchange  = function(){ cfg.bar = this.checked; render(); };
   $('base').oninput  = function(){ store.set('mw.base', this.value.trim()); render(); };
 
   // 케어 & 액션: 미리보기 강아지에 즉시 반영 (+ SYNC 연결 시 워치로도 전송)

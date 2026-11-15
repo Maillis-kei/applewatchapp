@@ -52,7 +52,34 @@ Finder 에서 이 폴더의 **build.command** 를 더블클릭하면 터미널 �
 
 ## 워치에 설치
 
-1. `bin/mungwatch.prg` 를 준비합니다 (build.command 가 만들어 줍니다. 음악 모델이면 `build.command` 대신 터미널에서 `./build.command fr165m`).
-2. 워치를 USB 로 Mac 에 연결합니다. Finder 에 안 보이면 OpenMTP 같은 MTP 전송 앱이 필요합니다.
-3. 만들어진 `.prg` 파일을 워치의 `GARMIN/APPS` 폴더로 복사하고 연결을 해제합니다.
-4. 워치의 앱 목록에서 **멍워치**를 실행합니다.
+워치용 파일은 `bin/mungwatch.prg` 입니다 (build.command 가 만들어 줍니다. 음악 모델이면 터미널에서 `./build.command fr165m`).
+
+### 플랜 A — Windows PC (가장 간단)
+
+1. `mungwatch.prg` 를 Windows PC 로 옮깁니다.
+2. Garmin Express 가 켜져 있으면 끄고, 워치를 USB 로 연결합니다.
+3. 탐색기 → 내 PC → Forerunner 165 → `GARMIN` → `APPS` 에 파일을 붙여넣습니다.
+4. 안전하게 제거한 뒤 워치의 앱 목록에서 **멍워치**를 실행합니다.
+
+### 플랜 B — Mac (워치가 Finder 에 안 보일 때)
+
+Mac 은 MTP 방식 기기를 Finder 에 띄우지 못하므로 전송 앱이 필요합니다.
+
+1. **OpenMTP 설치** (무료, 오픈소스): https://openmtp.ganeshrvel.com 에서 내려받아 응용 프로그램 폴더로 옮깁니다.
+2. **USB 를 쓰는 다른 앱 종료**: Garmin Express, Android File Transfer, 미리보기, Google Drive, OneDrive, Dropbox 등. MTP 는 한 번에 한 앱만 연결할 수 있습니다.
+3. 워치를 USB 케이블로 Mac 에 연결합니다. 워치 화면에 연결 방식을 묻는 창이 뜨면 MTP(파일 전송)를 고릅니다.
+4. OpenMTP 를 엽니다. 왼쪽이 Mac, 오른쪽이 워치입니다. 오른쪽에 아무것도 안 뜨면 새로고침을 누르거나 케이블을 다시 꽂습니다.
+5. 왼쪽에서 `Documents/applewatch/garmin/bin` 으로, 오른쪽에서 `GARMIN/APPS` 로 이동합니다.
+6. `mungwatch.prg` 를 왼쪽에서 오른쪽으로 끌어다 놓습니다. 끌어놓기가 안 되면 파일을 선택하고 복사(Cmd+C) 후 오른쪽 창에서 붙여넣기(Cmd+V)를 씁니다.
+7. OpenMTP 를 종료하고 케이블을 뽑습니다. 워치의 앱 목록에서 **멍워치**를 실행합니다.
+
+### 플랜 C — Mac 에서 OpenMTP 도 안 될 때
+
+- 케이블을 바꿔 봅니다. 충전 전용 케이블은 데이터가 안 넘어갑니다. 워치에 딸려 온 케이블을 쓰고, 허브 대신 Mac 에 직접 꽂습니다.
+- 그래도 안 되면 Windows PC 로 플랜 A 를 쓰는 것이 가장 확실합니다.
+
+### 설치 후 참고
+
+- 다시 연결해서 `APPS` 폴더를 보면 파일이 안 보일 수 있습니다. 최신 기기는 앱 파일을 숨기므로 설치가 안 된 것이 아닙니다.
+- 새 버전으로 바꿀 때는 같은 이름의 파일을 다시 복사하면 덮어씁니다.
+- 지울 때는 워치의 Connect IQ 스토어 앱에서 삭제하거나, PC/Mac 의 Garmin Express 를 씁니다.

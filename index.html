@@ -237,6 +237,7 @@ var store = {            // localStorage 는 워치에서 지워질 수 있으�
 // 우선순위: 기본값 < 저장된 값(아이폰) < URL 파라미터(워치는 이것만으로 100% 동작)
 var cfg = {name:'초코', dog:'shiba', acc:'none', sens:1.5, flip:false, debug:false, act:'', top:0, size:2};
 var saved = store.get('mw.cfg'); if(saved) for(var k in cfg) if(saved[k]!=null) cfg[k]=saved[k];
+cfg.debug = false;   // 진단 표시는 기억하지 않음: 링크에 debug=1 이 있을 때만 켜짐(컨트롤 타워에서는 매번 꺼진 상태로 시작)
 if(qs.get('name'))  cfg.name = qs.get('name').slice(0,8);
 if(DOGS[qs.get('dog')]) cfg.dog = qs.get('dog');
 if(ACCS[qs.get('acc')]) cfg.acc = qs.get('acc');
@@ -639,7 +640,7 @@ Stage.prototype = {
     if(this.hint){ g.globalAlpha = Math.min(1,this.hint.t)*.75; g.fillStyle='#bbb';
       g.font = '600 '+Math.max(11,Math.round(this.U*.058))+'px -apple-system,sans-serif';
       g.fillText(this.hint.text, W/2, H-Math.max(12,this.U*.07)); g.globalAlpha = 1; }
-    if(this.showDebug) this._debug();
+    if(this.showDebug && this.t < 30) this._debug();     // 진단 글씨는 시작 후 30초만 보이고 사라짐
   },
 
   /* 얼굴 변형의 핵심: 이미지 안의 점 (u,v) 가 화면에서 어디로 가는지 계산

@@ -749,6 +749,7 @@ Stage.prototype = {
     g.font = '600 '+fs+'px ui-monospace,Menlo,monospace'; g.textAlign = 'left'; g.textBaseline = 'top';
     g.fillStyle = s.status==='on' ? '#5fd38a' : '#ffb86b';
     lines.push('위 여백 '+this.top+' 깨움 '+(navigator.wakeLock?'O':'X'));
+    if(window.__fs) lines.push('전체 '+window.__fs.state);
     for(var i=0;i<lines.length;i++) g.fillText(lines[i], 6, this.top+6+i*fs*1.3);
     if(this.top){ g.fillRect(0, this.top-1, this.W, 1); }          // 여백 경계선
   }
@@ -810,8 +811,28 @@ function initWatch(){
   function keepAwake(){ try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').catch(function(){}); }catch(e){} }
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) keepAwake(); });
 
+  // 전체 화면 요청(시험): 통하면 주소창이 사라집니다. 결과는 진단 표시(debug=1)의 '전체' 항목에 나옵니다.
+  //   X=기능 없음, 요청=응답 대기, O=성공, 거부=브라우저가 거절
+  var FS = window.__fs = {state:'X'};
+  function goFull(){
+    var el = document.documentElement, fn = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen;
+    if(!fn) return;
+    FS.state = '요청';
+    try{
+      var r = fn.call(el);
+      if(r && r.then) r.then(function(){ FS.state = 'O'; stage.resize(); }, function(){ FS.state = '거부'; });
+    }catch(e){ FS.state = '거부'; }
+  }
+  ['fullscreenchange','webkitfullscreenchange'].forEach(function(ev){
+    document.addEventListener(ev, function(){
+      if(document.fullscreenElement || document.webkitFullscreenElement) FS.state = 'O';
+      setTimeout(function(){ stage.resize(); }, 100);
+    });
+  });
+
   document.getElementById('startBtn').onclick = function(){
     keepAwake();
+    if(SMALL || qs.get('fs')==='1') goFull();   // 워치에서만 시도 (큰 화면에서는 ?fs=1 로 시험)
     var p = Sensor.start();                     // ← 반드시 터치 핸들러 안에서 호출(권한 정책)
     document.getElementById('start').hidden = true;
     stage.resize(); stage.x = stage.W/2; stage.y = (stage.top+stage.H)/2;

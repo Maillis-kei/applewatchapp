@@ -237,9 +237,13 @@ if(qs.has('top'))   cfg.top   = Math.min(120, Math.max(0, parseInt(qs.get('top')
 // 모드: URL 파라미터가 최우선, 없으면 화면 너비 260px 이하를 워치로 판단
 var modeParam = qs.get('mode');
 var VIEW_W = window.innerWidth || document.documentElement.clientWidth || 0;
+var VIEW_H = window.innerHeight || document.documentElement.clientHeight || 0;
+// 실측: Apple Watch 브라우저는 화면을 320x240 으로 보고합니다(너비가 260 을 넘음).
+// 그래서 너비만 보지 않고 '짧은 쪽이 260 이하'이면 워치로 판단합니다. (아이폰은 짧은 쪽이 320 이상)
+var SMALL = VIEW_W > 0 && VIEW_H > 0 && Math.min(VIEW_W, VIEW_H) <= 260;
 var MODE = modeParam==='watch' ? 'watch'
          : modeParam==='phone' ? 'phone'
-         : (VIEW_W > 0 && VIEW_W <= 260 ? 'watch' : 'phone');   // 너비 0(숨겨진 탭 등)은 판단 불가 → 폰
+         : (SMALL ? 'watch' : 'phone');                // 크기를 알 수 없으면(숨겨진 탭 등) 폰
 
 // 이미지 미리 로드 (배경이 검정인 JPG — 캔버스에 'lighten' 합성으로 그려 검정을 투명처럼 처리)
 var IMG = {};
@@ -764,7 +768,7 @@ function initWatch(){
   document.title = cfg.name;
   document.getElementById('startImg').src = 'assets/'+cfg.dog+'.jpg';
   // 넓은 화면에서 테스트 중일 때만 폰 모드로 돌아가는 버튼 표시
-  if(VIEW_W === 0 || VIEW_W > 260){ var b = document.getElementById('toPhone'); b.hidden = false;
+  if(!SMALL){ var b = document.getElementById('toPhone'); b.hidden = false;
     b.onclick = function(){ go('phone'); }; }
   // 스크롤/바운스/디지털 크라운 스크롤 차단
   if(cfg.bar) document.body.className = 'watch scrolly';

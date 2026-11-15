@@ -1,4 +1,5 @@
 <drawables>
+    <!--: 사진을 기기 고유 색 형식으로 저장. drawBitmap2 로 확대해 그리려면 필요합니다. -->
     <bitmap id="LauncherIcon" filename="launcher_icon.png"/>
     <bitmap id="bubble_bark" filename="bubble_bark.png"/>
     <bitmap id="bubble_yum" filename="bubble_yum.png"/>

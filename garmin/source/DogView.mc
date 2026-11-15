@@ -13,8 +13,8 @@ class DogView extends WatchUi.View {
     private const DT = 0.1;              // 한 틱의 길이(초)
     private const SLEEP_AFTER = 45.0;    // 이 시간 동안 조작이 없으면 잠듦(초)
 
-    private var mFrames;                 // [견종][표정] → 리소스 ID
-    private var mCache;                  // 현재 견종의 표정 사진(처음 쓸 때 불러옴)
+    private var mFrames as Array = [];   // [견종][표정] → 리소스 ID
+    private var mCache as Array = [];    // 현재 견종의 표정 사진(처음 쓸 때 불러옴)
     private var mDog = 0;                // 현재 견종 번호
     private var mBubbleBark = null;
     private var mBubbleYum = null;
@@ -35,7 +35,7 @@ class DogView extends WatchUi.View {
     private var mTreat = 0.0;            // 간식이 떨어지는 중
     private var mBubble = 0;             // 0 없음, 1 멍!, 2 냠!
     private var mBubbleT = 0.0;
-    private var mHearts = [];            // 떠오르는 하트: [x, y, 남은 수명]
+    private var mHearts as Array = [];   // 떠오르는 하트: [x, y, 남은 수명]
     private var mSwitch = 0.0;           // 견종을 바꾼 직후의 '통' 튀는 효과
 
     function initialize() {
@@ -225,13 +225,13 @@ class DogView extends WatchUi.View {
         }
         var bmp = mCache[idx];
 
-        // 크기: 화면의 88% + 숨쉬기(±2%) + 짖을 때·바꿀 때 살짝 커짐
-        var scale = 0.88 + 0.02 * Math.sin(mT * (mAsleep ? 1.2 : 2.3));
-        if (mBark > 0 && mBark <= 0.28) { scale += 0.04; }
-        if (mSwitch > 0) { scale += 0.2 * mSwitch; }
-        var size = (w * scale).toNumber();
-        var dy = (mAsleep ? h * 0.03 : 0).toNumber();
-        dc.drawScaledBitmap(cx - size / 2, cy - size / 2 + dy, size, size, bmp);
+        // 사진은 원래 크기(340px) 그대로 가운데에 그립니다.
+        // 숨쉬기는 위아래로 살짝 움직이는 것으로, 짖을 때·견종을 바꿀 때는 통 튀는 것으로 표현합니다.
+        var dy = (3 * Math.sin(mT * (mAsleep ? 1.2 : 2.3))).toNumber();
+        if (mAsleep) { dy += (h * 0.03).toNumber(); }
+        if (mBark > 0 && mBark <= 0.28) { dy -= 8; }
+        if (mSwitch > 0) { dy -= (40 * mSwitch).toNumber(); }
+        dc.drawBitmap(cx - bmp.getWidth() / 2, cy - bmp.getHeight() / 2 + dy, bmp);
 
         // 잘 때: Z 표시
         if (mAsleep) {

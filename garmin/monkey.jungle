@@ -1,5 +1,1 @@
 project.manifest = manifest.xml
-
-# 기기별 강아지 사진 크기 (기본 resources 는 fr165 용 340px)
-fr265.resourcePath = $(fr265.resourcePath);resources-fr265
-fr265s.resourcePath = $(fr265s.resourcePath);resources-fr265s

@@ -20,7 +20,7 @@ source/DogApp.mc          시작점
 source/DogView.mc         상태와 그리기
 source/DogDelegate.mc     터치·버튼 입력
 resources/drawables/      강아지 표정 36장(fr165 용 340px) + 말풍선 + 아이콘
-resources-fr265/          fr265 용 강아지 사진(362px)
+resources-fr265/          fr265 용 강아지 사진(362px, 기기 이름 폴더라 자동으로 적용)
 resources-fr265s/         fr265s 용 강아지 사진(314px)
 ```
 

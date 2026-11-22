@@ -3,14 +3,17 @@
 # 멍워치 가민 빌드 도우미 (Mac 에서 더블클릭해서 실행)
 #  1) Java · Connect IQ SDK · Forerunner 165 기기 파일이 있는지 확인
 #  2) 개발자 키가 없으면 만들기
-#  3) 빌드 → 시뮬레이터 실행 → 워치용 파일(bin/mungwatch.prg) 만들기
+#  3) 빌드 → 시뮬레이터 실행 → 기기별 워치용 파일 만들기
+#       bin/mungwatch_fr165.prg, bin/mungwatch_fr265.prg, bin/mungwatch_fr265s.prg ...
+#     시뮬레이터 기기를 바꾸려면 터미널에서:  ./build.command fr265
 #  4) 소스가 바뀌면 자동으로 다시 빌드 (창을 닫으면 멈춤)
 # 진행 상황은 이 폴더의 build_log.txt 에 기록됩니다.
 # ─────────────────────────────────────────────────────────────
 cd "$(dirname "$0")" || exit 1
 LOG="build_log.txt"
 CIQ="$HOME/Library/Application Support/Garmin/ConnectIQ"
-DEVICE="${1:-fr165}"
+DEVICES="fr165 fr165m fr265 fr265s"   # 워치용 파일을 만들 기기들
+SIMDEV="${1:-fr165}"                  # 시뮬레이터로 띄울 기기
 KEY="$HOME/.mungwatch_garmin_key.der"
 say(){ echo "$@" | tee -a "$LOG"; }
 
@@ -42,13 +45,18 @@ else
   MISSING=1
 fi
 
-# 3) 기기 파일
-if [ -d "$CIQ/Devices/$DEVICE" ]; then
-  say "[확인] 기기: $DEVICE"
-else
-  say "[필요] SDK Manager 의 Devices 탭에서 'Forerunner 165' 를 내려받아 주세요."
+# 3) 기기 파일 (SDK Manager 의 Devices 탭에서 내려받은 것만 빌드)
+READY=""
+for D in $DEVICES; do
+  if [ -d "$CIQ/Devices/$D" ]; then READY="$READY $D"; else say "[건너뜀] $D — SDK Manager 의 Devices 탭에서 내려받으면 함께 빌드됩니다."; fi
+done
+if [ -z "$READY" ]; then
+  say "[필요] SDK Manager 의 Devices 탭에서 Forerunner 165 / 265 등 기기를 내려받아 주세요."
   MISSING=1
+else
+  say "[확인] 빌드할 기기:$READY"
 fi
+case " $READY " in *" $SIMDEV "*) ;; *) SIMDEV="$(echo $READY | cut -d' ' -f1)";; esac
 
 if [ -n "$MISSING" ]; then
   say ""
@@ -79,19 +87,21 @@ while true; do
   if [ "$S" != "$LAST" ]; then
     LAST="$S"
     : > "$LOG"
-    say "=== 빌드  $(date '+%F %T')  (SDK $(basename "$SDK"), 기기 $DEVICE) ==="
-    if "$SDK/bin/monkeyc" -o bin/mungwatch_sim.prg -f monkey.jungle -y "$KEY" -d "${DEVICE}_sim" -w >> "$LOG" 2>&1; then
+    say "=== 빌드  $(date '+%F %T')  (SDK $(basename "$SDK"), 시뮬레이터 $SIMDEV) ==="
+    if "$SDK/bin/monkeyc" -o bin/mungwatch_sim.prg -f monkey.jungle -y "$KEY" -d "${SIMDEV}_sim" -w >> "$LOG" 2>&1; then
       say "STATUS: BUILD_OK"
       [ -n "$DOPID" ] && kill "$DOPID" 2>/dev/null
-      "$SDK/bin/monkeydo" bin/mungwatch_sim.prg "$DEVICE" >> "$LOG" 2>&1 &
+      "$SDK/bin/monkeydo" bin/mungwatch_sim.prg "$SIMDEV" >> "$LOG" 2>&1 &
       DOPID=$!
-      # 워치에 넣을 파일
-      if "$SDK/bin/monkeyc" -o bin/mungwatch.prg -f monkey.jungle -y "$KEY" -d "$DEVICE" -r -w >> "$LOG" 2>&1; then
-        say "워치용 파일: $(pwd)/bin/mungwatch.prg  ($(du -h bin/mungwatch.prg | cut -f1))"
-        say "STATUS: DEVICE_BUILD_OK"
-      else
-        say "STATUS: DEVICE_BUILD_FAILED"
-      fi
+      # 기기별 워치용 파일
+      for D in $READY; do
+        if "$SDK/bin/monkeyc" -o "bin/mungwatch_$D.prg" -f monkey.jungle -y "$KEY" -d "$D" -r -w >> "$LOG" 2>&1; then
+          say "워치용 파일 ($D): $(pwd)/bin/mungwatch_$D.prg  ($(du -h "bin/mungwatch_$D.prg" | cut -f1))"
+        else
+          say "STATUS: DEVICE_BUILD_FAILED ($D)"
+        fi
+      done
+      say "STATUS: DEVICE_BUILD_DONE"
     else
       say "STATUS: BUILD_FAILED"
     fi

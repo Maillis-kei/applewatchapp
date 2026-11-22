@@ -1,11 +1,13 @@
 <?xml version="1.0"?>
-<!-- 멍워치 가민 버전. 대상 기기: Forerunner 165 / 165 Music (390x390 원형 AMOLED, 터치 + 버튼) -->
+<!-- 멍워치 가민 버전. 대상 기기: Forerunner 165 / 165 Music (390x390), Forerunner 265 (416x416), 265S (360x360) — 모두 원형 AMOLED, 터치 + 버튼 -->
 <iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
     <iq:application id="cf7dfefa5cb44685bb4a5e93a4ba6482" type="watch-app" name="@Strings.AppName" entry="DogApp"
                     launcherIcon="@Drawables.LauncherIcon" minApiLevel="3.2.0" version="1.0.0">
         <iq:products>
             <iq:product id="fr165"/>
             <iq:product id="fr165m"/>
+            <iq:product id="fr265"/>
+            <iq:product id="fr265s"/>
         </iq:products>
         <iq:permissions/>
         <iq:languages>

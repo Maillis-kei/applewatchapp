@@ -1,4 +1,4 @@
-# 멍워치 — 가민 Forerunner 165 버전
+# 멍워치 — 가민 Forerunner 165 / 265 버전
 
 센서 없이 화면 가득 강아지가 떠 있고, 터치와 버튼에 반응하는 앱입니다.
 
@@ -14,12 +14,14 @@
 ## 구성
 
 ```
-manifest.xml              앱 정보, 대상 기기(fr165, fr165m)
+manifest.xml              앱 정보, 대상 기기(fr165, fr165m, fr265, fr265s)
 monkey.jungle             빌드 설정
 source/DogApp.mc          시작점
 source/DogView.mc         상태와 그리기
 source/DogDelegate.mc     터치·버튼 입력
-resources/drawables/      강아지 표정 36장(260px) + 말풍선 + 아이콘
+resources/drawables/      강아지 표정 36장(fr165 용 340px) + 말풍선 + 아이콘
+resources-fr265/          fr265 용 강아지 사진(362px)
+resources-fr265s/         fr265s 용 강아지 사진(314px)
 ```
 
 ## 가장 쉬운 방법: build.command 더블클릭
@@ -28,7 +30,7 @@ Finder 에서 이 폴더의 **build.command** 를 더블클릭하면 터미널 �
 
 1. Java, Connect IQ SDK, Forerunner 165 기기 파일이 있는지 확인 (없으면 받을 페이지를 열어 줌)
 2. 개발자 키 생성
-3. 빌드 → 시뮬레이터 실행 → 워치용 파일 `bin/mungwatch.prg` 생성
+3. 빌드 → 시뮬레이터 실행 → 기기별 워치용 파일 `bin/mungwatch_<기기>.prg` 생성
 4. 소스가 바뀔 때마다 자동으로 다시 빌드 (창을 닫으면 멈춤)
 
 진행 상황과 오류는 `build_log.txt` 에 기록됩니다.
@@ -52,11 +54,20 @@ Finder 에서 이 폴더의 **build.command** 를 더블클릭하면 터미널 �
 
 ## 워치에 설치
 
-워치용 파일은 `bin/mungwatch.prg` 입니다 (build.command 가 만들어 줍니다. 음악 모델이면 터미널에서 `./build.command fr165m`).
+워치용 파일은 기기별로 만들어집니다. **자기 워치에 맞는 파일 하나만** 넣으세요.
+
+| 워치 | 파일 | 화면 |
+|---|---|---|
+| Forerunner 165 | `bin/mungwatch_fr165.prg` | 390×390 |
+| Forerunner 165 Music | `bin/mungwatch_fr165m.prg` | 390×390 |
+| Forerunner 265 | `bin/mungwatch_fr265.prg` | 416×416 |
+| Forerunner 265S | `bin/mungwatch_fr265s.prg` | 360×360 |
+
+SDK Manager 의 Devices 탭에서 내려받은 기기만 빌드됩니다. 265 용 파일이 안 생기면 Devices 탭에서 Forerunner 265 / 265S 를 내려받으세요.
 
 ### 플랜 A — Windows PC (가장 간단)
 
-1. `mungwatch.prg` 를 Windows PC 로 옮깁니다.
+1. 자기 워치용 `mungwatch_<기기>.prg` 를 Windows PC 로 옮깁니다.
 2. Garmin Express 가 켜져 있으면 끄고, 워치를 USB 로 연결합니다.
 3. 탐색기 → 내 PC → Forerunner 165 → `GARMIN` → `APPS` 에 파일을 붙여넣습니다.
 4. 안전하게 제거한 뒤 워치의 앱 목록에서 **멍워치**를 실행합니다.
@@ -70,7 +81,7 @@ Mac 은 MTP 방식 기기를 Finder 에 띄우지 못하므로 전송 앱이 필
 3. 워치를 USB 케이블로 Mac 에 연결합니다. 워치 화면에 연결 방식을 묻는 창이 뜨면 MTP(파일 전송)를 고릅니다.
 4. OpenMTP 를 엽니다. 왼쪽이 Mac, 오른쪽이 워치입니다. 오른쪽에 아무것도 안 뜨면 새로고침을 누르거나 케이블을 다시 꽂습니다.
 5. 왼쪽에서 `Documents/applewatch/garmin/bin` 으로, 오른쪽에서 `GARMIN/APPS` 로 이동합니다.
-6. `mungwatch.prg` 를 왼쪽에서 오른쪽으로 끌어다 놓습니다. 끌어놓기가 안 되면 파일을 선택하고 복사(Cmd+C) 후 오른쪽 창에서 붙여넣기(Cmd+V)를 씁니다.
+6. 자기 워치용 `mungwatch_<기기>.prg` 를 왼쪽에서 오른쪽으로 끌어다 놓습니다. 끌어놓기가 안 되면 파일을 선택하고 복사(Cmd+C) 후 오른쪽 창에서 붙여넣기(Cmd+V)를 씁니다.
 7. OpenMTP 를 종료하고 케이블을 뽑습니다. 워치의 앱 목록에서 **멍워치**를 실행합니다.
 
 ### 플랜 C — Mac 에서 OpenMTP 도 안 될 때
